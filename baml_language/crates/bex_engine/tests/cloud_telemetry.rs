@@ -462,14 +462,14 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         let header = file.header.unwrap();
         assert_eq!(header.recording_id, recording_id.as_bytes());
         assert!(header.source_cas_id.is_none(), "cloud sources stay local");
-        // Cloud files name the program and the process's platform, and no
-        // build when the host describes none.
+        // Cloud files name the program and the process's platform, no build
+        // when the host describes none, and every span whole in its end record.
         assert!(header.program_id.is_some() && header.build.is_none());
         assert_eq!(header.os.as_deref(), Some(std::env::consts::OS));
         assert_eq!(header.arch.as_deref(), Some(std::env::consts::ARCH));
         assert_eq!(
             header.format_minor,
-            btel_core::recording::minor::PROCESS_PLATFORM
+            btel_core::recording::minor::SELF_CONTAINED
         );
         // Normal shutdown settles every run: the last uploaded file ends it.
         assert_eq!(file.end.is_some(), index + 1 == prepares.len());
@@ -487,12 +487,10 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         for section in file.spans.unwrap().sections {
             for event in section.events {
                 match event.event.unwrap() {
-                    proto::span_event::Event::FunctionAnnouncement(entry) => {
-                        announcements += 1;
-                        references.insert(snapshot_hex(entry.inputs_cas_id.unwrap()));
-                    }
+                    proto::span_event::Event::FunctionAnnouncement(_) => announcements += 1,
                     proto::span_event::Event::FunctionCompletion(done) => {
                         completions += 1;
+                        references.insert(snapshot_hex(done.inputs_cas_id.unwrap()));
                         references.insert(snapshot_hex(done.value_cas_id.unwrap()));
                     }
                     proto::span_event::Event::ThreadCompletion(done) => {
@@ -540,7 +538,9 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         named_functions,
         BTreeSet::from(["user.leaf".to_owned(), "user.main".to_owned()])
     );
-    assert_eq!((announcements, completions), (2, 2));
+    // A start record only for a call still open when its file sealed.
+    assert_eq!(completions, 2);
+    assert!(announcements <= completions);
     assert!(threads >= 2);
     assert!(uploaded > 0 && skipped > 0);
     assert!(

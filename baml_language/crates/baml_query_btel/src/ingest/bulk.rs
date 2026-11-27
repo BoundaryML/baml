@@ -4,7 +4,7 @@
 //! files merge into maps under the same rules the incremental `Applier`
 //! applies with SQL: the first definition wins and a different one is a
 //! conflict with an issue, references without definitions become
-//! placeholders, and announcements and completions merge by identity.
+//! placeholders, and slim start records and completions merge by identity.
 //! Derived columns (profiler nodes, entry paths) are computed once from the
 //! final evidence instead of being repaired after every batch. Then every
 //! row is written once, in key order.
@@ -24,9 +24,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{
     NETWORK_COMPLETION_CONFLICT, NETWORK_INVALID, NETWORK_INVALID_DETAIL, NETWORK_SPAN_CONFLICT,
-    Totals, cas_id, event_seq, id, network_invalid,
+    Totals, cas_id, id, manual, network_invalid,
     profile::{self, Counts, Part, PathFacts, Sysop},
-    quantity, sequence_i64,
+    quantity, sequence_i64, thread_start,
 };
 use crate::{Error, functions};
 
@@ -343,12 +343,11 @@ struct CallRow {
     self_await: Option<i64>,
     outcome: Option<i64>,
     panicked: Option<bool>,
-    needs_announcement: Option<bool>,
     value_cas: Option<[u8; 16]>,
     conflict: i64,
 }
 
-/// A network span's announcement.
+/// A network span's start, from its slim start record or its completion.
 #[derive(PartialEq, Eq)]
 struct NetworkDef {
     thread: u64,
@@ -358,7 +357,6 @@ struct NetworkDef {
     started: Option<i64>,
     method: String,
     url: String,
-    request_cas: Option<[u8; 16]>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -367,10 +365,10 @@ struct NetworkDone {
     outcome: i64,
     panicked: bool,
     error_cas: Option<[u8; 16]>,
+    request_cas: Option<[u8; 16]>,
 }
 
-/// A network span: its first announcement and first completion, or a
-/// placeholder for one only its events or completion name so far.
+/// A network span: its first start and first completion.
 #[derive(Default)]
 struct NetworkRow {
     def: Option<Box<NetworkDef>>,
@@ -378,11 +376,10 @@ struct NetworkRow {
     conflict: bool,
 }
 
-/// One network event, in recording order by `(sequence, position)`.
+/// One event of a network span's first completion, at its position there.
 struct EventRow {
     span: u64,
-    sequence: u64,
-    position: u32,
+    position: i64,
     name: String,
     at: Option<i64>,
     payload_cas: Option<[u8; 16]>,
@@ -408,9 +405,11 @@ pub(super) struct Bulk {
     thread_errors: FxHashMap<u64, [u8; 16]>,
     /// Sysop count and ticks per call path.
     sysops: BTreeMap<u32, (u128, u128)>,
-    /// The model usage a call's or thread's first completion carried, stored
-    /// on its row. Kept apart from the rows: almost none have any.
+    /// The model usage and total usage a call's or thread's first completion
+    /// carried, stored on its row. Kept apart from the rows: almost none have
+    /// any.
     usage: BTreeMap<u64, Vec<crate::usage::ModelUsage>>,
+    total_usage: BTreeMap<u64, Vec<crate::usage::ModelUsage>>,
     network_spans: FxHashMap<u64, NetworkRow>,
     network_events: Vec<EventRow>,
     /// The first header that names the process, and how it ended.
@@ -567,6 +566,17 @@ impl Bulk {
             for function in &definitions.functions {
                 self.function(sequence, function);
             }
+            for function in &definitions.slim_functions {
+                // What names the function when no file read so far defined
+                // it in full, never a second definition of it.
+                if self
+                    .functions
+                    .get(&function.function_id)
+                    .is_none_or(|row| row.metadata.is_none())
+                {
+                    self.function(sequence, function);
+                }
+            }
             for path in &definitions.call_paths {
                 self.call_path(sequence, path);
             }
@@ -634,8 +644,6 @@ impl Bulk {
             }
         }
         if let Some(spans) = &file.spans {
-            // Each network event's position among the file's.
-            let mut network_events = 0_u32;
             for section in &spans.sections {
                 self.refer_thread(section.thread_id);
                 for event in &section.events {
@@ -654,41 +662,12 @@ impl Bulk {
                                 .row(section.thread_id)
                                 .set(THREAD_ANNOUNCED, true);
                         }
-                        Some(Event::ThreadRunning(running)) => {
-                            self.threads
-                                .row(section.thread_id)
-                                .ran(tick(running.at_ticks));
-                        }
                         Some(Event::ThreadCompletion(done)) => {
-                            let completed = tick(done.completed_at_ticks);
-                            let outcome = i64::from(done.outcome);
-                            let row = self.threads.row(section.thread_id);
-                            match row.completion() {
-                                None => {
-                                    row.complete(completed, outcome, done.panicked);
-                                    if let Some(error) = &done.error_cas_id {
-                                        self.thread_errors.insert(section.thread_id, cas_id(error));
-                                    }
-                                    let usage = crate::usage::from_wire(&done.usage);
-                                    if !usage.is_empty() {
-                                        self.usage.insert(section.thread_id, usage);
-                                    }
-                                }
-                                Some(first) if first == (completed, outcome) => {}
-                                Some(_) => {
-                                    row.set(THREAD_COMPLETION_CONFLICT, true);
-                                    push_issue(
-                                        &mut self.issues,
-                                        sequence,
-                                        "thread_completion_conflict",
-                                        Some(section.thread_id.to_string()),
-                                        "a thread completed twice with different evidence; the first is kept",
-                                    );
-                                }
-                            }
+                            self.thread_completion(sequence, section.thread_id, done, &mut tick);
                         }
                         Some(Event::FunctionAnnouncement(entry)) => {
                             self.refer_path(entry.call_path_id);
+                            // A slim start: the completion carries the rest.
                             let announced = CallRow {
                                 thread: section.thread_id,
                                 parent: entry.parent_id,
@@ -696,16 +675,15 @@ impl Bulk {
                                 reentry: None,
                                 announced_sequence: Some(saturating_sequence(sequence)),
                                 entered: tick(entry.entered_at_ticks),
-                                inputs_cas: entry.inputs_cas_id.as_ref().map(cas_id),
-                                type_args_cas: entry.type_args_cas_id.as_ref().map(cas_id),
+                                inputs_cas: None,
+                                type_args_cas: None,
                                 completed_sequence: None,
                                 late: None,
-                                manual: Some(entry.manual),
+                                manual: None,
                                 exited: None,
                                 self_await: None,
                                 outcome: None,
                                 panicked: None,
-                                needs_announcement: None,
                                 value_cas: None,
                                 conflict: 0,
                             };
@@ -718,15 +696,12 @@ impl Bulk {
                                         && (row.announced_sequence.is_some()
                                             || row.thread != announced.thread
                                             || row.parent != announced.parent
-                                            || row.manual != announced.manual
                                             || row.path != announced.path
                                             || row.entered != announced.entered)
                                     {
                                         row.conflict = 1;
                                     }
                                     row.announced_sequence = announced.announced_sequence;
-                                    row.inputs_cas = announced.inputs_cas;
-                                    row.type_args_cas = announced.type_args_cas;
                                 }
                             }
                         }
@@ -741,71 +716,22 @@ impl Bulk {
                             let _ = tick(log.at_ticks);
                         }
                         Some(Event::NetworkAnnouncement(entry)) => {
-                            let path = (entry.call_path_id != 0).then_some(entry.call_path_id);
-                            if let Some(path) = path {
-                                self.refer_path(path);
-                            }
                             let def = NetworkDef {
                                 thread: section.thread_id,
                                 parent: entry.parent_id,
-                                path,
+                                path: (entry.call_path_id != 0).then_some(entry.call_path_id),
                                 started: tick(entry.started_at_ticks),
                                 method: entry.method.clone(),
                                 url: entry.url.clone(),
-                                request_cas: entry.request_cas_id.as_ref().map(cas_id),
                             };
-                            let row = self.network_spans.entry(entry.id).or_default();
-                            match &row.def {
-                                None => row.def = Some(Box::new(def)),
-                                Some(first) if **first == def => {}
-                                Some(_) => {
-                                    row.conflict = true;
-                                    push_issue(
-                                        &mut self.issues,
-                                        sequence,
-                                        "network_span_conflict",
-                                        Some(entry.id.to_string()),
-                                        NETWORK_SPAN_CONFLICT,
-                                    );
-                                }
-                            }
-                        }
-                        Some(Event::NetworkEvent(observed)) => {
-                            self.network_spans.entry(observed.span_id).or_default();
-                            self.network_events.push(EventRow {
-                                span: observed.span_id,
-                                sequence,
-                                position: network_events,
-                                name: observed.name.clone(),
-                                at: tick(observed.at_ticks),
-                                payload_cas: observed.payload_cas_id.as_ref().map(cas_id),
-                            });
-                            network_events += 1;
+                            self.network_start(sequence, entry.id, def);
                         }
                         Some(Event::NetworkCompletion(done)) => {
-                            let completion = NetworkDone {
-                                completed: tick(done.completed_at_ticks),
-                                outcome: i64::from(done.outcome),
-                                panicked: done.panicked,
-                                error_cas: done.error_cas_id.as_ref().map(cas_id),
-                            };
-                            let row = self.network_spans.entry(done.span_id).or_default();
-                            match row.done {
-                                None => row.done = Some(completion),
-                                Some(first) if first == completion => {}
-                                Some(_) => {
-                                    row.conflict = true;
-                                    push_issue(
-                                        &mut self.issues,
-                                        sequence,
-                                        "network_completion_conflict",
-                                        Some(done.span_id.to_string()),
-                                        NETWORK_COMPLETION_CONFLICT,
-                                    );
-                                }
-                            }
+                            self.network_completion(sequence, done, &mut tick);
                         }
-                        None => {}
+                        // Not written since minor 16: the completion carries
+                        // when a future began running and a request's events.
+                        Some(Event::ThreadRunning(_) | Event::NetworkEvent(_)) | None => {}
                     }
                 }
             }
@@ -820,6 +746,53 @@ impl Bulk {
         }
     }
 
+    /// A thread's completion, like `Applier::thread_completion`.
+    fn thread_completion(
+        &mut self,
+        sequence: u64,
+        thread: u64,
+        done: &proto::ThreadCompletion,
+        tick: &mut impl FnMut(u64) -> Option<i64>,
+    ) {
+        if let Some(start) = thread_start(thread, done) {
+            let started = tick(start.started_at_ticks);
+            self.thread(sequence, &start, started);
+        }
+        let completed = tick(done.completed_at_ticks);
+        let ran = done.running_at_ticks.and_then(&mut *tick);
+        let outcome = i64::from(done.outcome);
+        let row = self.threads.row(thread);
+        match row.completion() {
+            None => {
+                row.complete(completed, outcome, done.panicked);
+                row.ran(ran);
+                if let Some(error) = &done.error_cas_id {
+                    self.thread_errors.insert(thread, cas_id(error));
+                }
+                let usage = crate::usage::from_wire(&done.usage);
+                if !usage.is_empty() {
+                    self.usage.insert(thread, usage);
+                }
+                let total = crate::usage::from_wire(&done.total_usage);
+                if !total.is_empty() {
+                    self.total_usage.insert(thread, total);
+                }
+            }
+            Some(first) if first == (completed, outcome) => {}
+            Some(_) => {
+                row.set(THREAD_COMPLETION_CONFLICT, true);
+                push_issue(
+                    &mut self.issues,
+                    sequence,
+                    "thread_completion_conflict",
+                    Some(thread.to_string()),
+                    "a thread completed twice with different evidence; the first is kept",
+                );
+            }
+        }
+    }
+
+    /// A call's completion, like `Applier::completion`.
     fn completion(
         &mut self,
         sequence: u64,
@@ -828,20 +801,26 @@ impl Bulk {
         late: bool,
         tick: &mut impl FnMut(u64) -> Option<i64>,
     ) {
-        let (outcome, needs_announcement) =
-            evidence::completion(done, late).expect("validated completion flags");
+        let (outcome, _) = evidence::completion(done, late).expect("validated completion flags");
         let (path, reentry) = evidence::split_node(done.node);
         self.refer_path(path);
         let entered = tick(done.entered_at_ticks);
         let exited = tick(done.exited_at_ticks);
         let self_await = tick(done.self_await_ticks);
         let value_cas = done.value_cas_id.as_ref().map(cas_id);
+        let inputs_cas = done.inputs_cas_id.as_ref().map(cas_id);
+        let type_args_cas = done.type_args_cas_id.as_ref().map(cas_id);
+        let manual = manual(done);
         let completed_sequence = Some(saturating_sequence(sequence));
         // The first usage stored wins, as on the incremental path: a second
         // completion is a conflict.
         let usage = crate::usage::from_wire(&done.usage);
         if !usage.is_empty() {
             self.usage.entry(done.id).or_insert(usage);
+        }
+        let total = crate::usage::from_wire(&done.total_usage);
+        if !total.is_empty() {
+            self.total_usage.entry(done.id).or_insert(total);
         }
         match self.calls.get_mut(&done.id) {
             None => {
@@ -854,16 +833,15 @@ impl Bulk {
                         reentry: Some(reentry),
                         announced_sequence: None,
                         entered,
-                        inputs_cas: None,
-                        type_args_cas: None,
+                        inputs_cas,
+                        type_args_cas,
                         completed_sequence,
                         late: Some(late),
-                        manual: Some(done.completion_flags & 32 != 0),
+                        manual: Some(manual),
                         exited,
                         self_await,
                         outcome: Some(outcome.code()),
                         panicked: Some(done.panicked),
-                        needs_announcement: Some(needs_announcement),
                         value_cas,
                         conflict: 0,
                     },
@@ -874,7 +852,6 @@ impl Bulk {
                     && (row.completed_sequence.is_some()
                         || row.thread != thread
                         || row.parent != done.parent_id
-                        || row.manual != Some(done.completion_flags & 32 != 0)
                         || row.path != path
                         || (row.entered.is_some() && row.entered != entered))
                 {
@@ -883,14 +860,89 @@ impl Bulk {
                 row.reentry = Some(reentry);
                 row.completed_sequence = completed_sequence;
                 row.late = Some(late);
-                row.manual = Some(done.completion_flags & 32 != 0);
+                row.manual = Some(manual);
                 row.entered = row.entered.or(entered);
                 row.exited = exited;
                 row.self_await = self_await;
                 row.outcome = Some(outcome.code());
                 row.panicked = Some(done.panicked);
-                row.needs_announcement = Some(needs_announcement);
+                row.inputs_cas = inputs_cas;
+                row.type_args_cas = type_args_cas;
                 row.value_cas = value_cas;
+            }
+        }
+    }
+
+    /// The first start of a network span wins, like `Applier::network_start`.
+    fn network_start(&mut self, sequence: u64, span: u64, def: NetworkDef) {
+        self.refer_thread(def.thread);
+        if let Some(path) = def.path {
+            self.refer_path(path);
+        }
+        let row = self.network_spans.entry(span).or_default();
+        match &row.def {
+            None => row.def = Some(Box::new(def)),
+            Some(first) if **first == def => {}
+            Some(_) => {
+                row.conflict = true;
+                push_issue(
+                    &mut self.issues,
+                    sequence,
+                    "network_span_conflict",
+                    Some(span.to_string()),
+                    NETWORK_SPAN_CONFLICT,
+                );
+            }
+        }
+    }
+
+    /// A network span's completion, like `Applier::network_completion`.
+    fn network_completion(
+        &mut self,
+        sequence: u64,
+        done: &proto::NetworkCompletion,
+        tick: &mut impl FnMut(u64) -> Option<i64>,
+    ) {
+        let def = NetworkDef {
+            thread: done.thread_id,
+            parent: done.parent_id,
+            path: (done.call_path_id != 0).then_some(done.call_path_id),
+            started: tick(done.started_at_ticks),
+            method: done.method.clone(),
+            url: done.url.clone(),
+        };
+        self.network_start(sequence, done.span_id, def);
+        let completion = NetworkDone {
+            completed: tick(done.completed_at_ticks),
+            outcome: i64::from(done.outcome),
+            panicked: done.panicked,
+            error_cas: done.error_cas_id.as_ref().map(cas_id),
+            request_cas: done.request_cas_id.as_ref().map(cas_id),
+        };
+        let row = self.network_spans.entry(done.span_id).or_default();
+        match row.done {
+            None => {
+                row.done = Some(completion);
+                for (position, event) in done.events.iter().enumerate() {
+                    self.network_events.push(EventRow {
+                        span: done.span_id,
+                        position: i64::try_from(position).unwrap_or(i64::MAX),
+                        name: event.name.clone(),
+                        at: tick(event.at_ticks),
+                        payload_cas: event.payload_cas_id.as_ref().map(cas_id),
+                    });
+                }
+            }
+            Some(first) if first == completion => {}
+            Some(_) => {
+                row.conflict = true;
+                push_issue(
+                    &mut self.issues,
+                    sequence,
+                    "network_completion_conflict",
+                    Some(done.span_id.to_string()),
+                    NETWORK_COMPLETION_CONFLICT,
+                );
             }
         }
     }
@@ -901,6 +953,7 @@ impl Bulk {
                 let encoded = metadata.encode_to_vec();
                 if let Some(row) = self.functions.get_mut(&function.function_id)
                     && let Some(previous) = &row.metadata
+                    && !crate::ingest::is_slim_of(&previous.encoded, function)
                 {
                     if previous.encoded != encoded {
                         row.conflict = true;
@@ -1051,14 +1104,6 @@ impl Bulk {
     /// Write every row. A `complete` recording (its end applied) gets no
     /// more facts, so it is written folded, like `profile::fold` leaves it:
     /// its paths summed by node, and only the paths spans read.
-    /// The nodes whose usage `write` stores, for the totals.
-    pub(super) fn charged(&self) -> Vec<([u8; 8], Vec<crate::usage::ModelUsage>)> {
-        self.usage
-            .iter()
-            .map(|(node, usage)| (id(*node), usage.clone()))
-            .collect()
-    }
-
     pub(super) fn write(
         mut self,
         tx: &Transaction<'_>,
@@ -1097,7 +1142,7 @@ impl Bulk {
             self.write_network_spans(tx, rec)
         })?;
         self.network_events
-            .sort_unstable_by_key(|event| (event.span, event.sequence, event.position));
+            .sort_unstable_by_key(|event| (event.span, event.position));
         self.write_network_events(tx, rec)?;
         let mut insert = tx.prepare_cached(
             "INSERT INTO issue (rec, sequence, code, subject, detail) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -1131,7 +1176,7 @@ impl Bulk {
                 sequence: sequence.map_or(0, |s| u64::try_from(s).unwrap_or(0)),
                 code: "call_evidence_conflict",
                 subject: Some(call_id.to_string()),
-                detail: "evidence for one call disagrees (announcement vs completion, or two completions); its status is conflicted".to_owned(),
+                detail: "evidence for one call disagrees (start vs completion, or two completions); its status is conflicted".to_owned(),
             });
         }
     }
@@ -1514,8 +1559,8 @@ impl Bulk {
             tx,
             "thread (rec, thread_id, defined, parent_id, spawn_call_path_id, started_ticks,
                epoch_id, announced, ran_ticks, completed_ticks, outcome, panicked, name,
-               completion_conflict, conflict, entry_call_path_id, usage, error_cas)",
-            18,
+               completion_conflict, conflict, entry_call_path_id, usage, total_usage, error_cas)",
+            19,
             &ids,
             |b, thread| {
                 let row = &self.threads[&thread];
@@ -1539,6 +1584,11 @@ impl Bulk {
                 b.bind((row.entry_path != 0).then(|| i64::from(row.entry_path)))?;
                 b.bind(
                     self.usage
+                        .get(&thread)
+                        .and_then(|u| crate::usage::to_json(u)),
+                )?;
+                b.bind(
+                    self.total_usage
                         .get(&thread)
                         .and_then(|u| crate::usage::to_json(u)),
                 )?;
@@ -1640,8 +1690,8 @@ impl Bulk {
             tx,
             "call (rec, call_id, thread_id, parent_id, call_path_id, reentry,
                announced_sequence, entered_ticks, inputs_cas, type_args_cas, completed_sequence,
-               late, manual, exited_ticks, self_await_ticks, outcome, panicked, needs_announcement,
-               value_cas, usage, conflict)",
+               late, manual, exited_ticks, self_await_ticks, outcome, panicked, value_cas, usage,
+               total_usage, conflict)",
             21,
             &ids,
             |b, call| {
@@ -1663,9 +1713,13 @@ impl Bulk {
                 b.bind(row.self_await)?;
                 b.bind(row.outcome)?;
                 b.bind(row.panicked)?;
-                b.bind(row.needs_announcement)?;
                 b.bind(row.value_cas.as_ref().map(<[u8; 16]>::as_slice))?;
                 b.bind(self.usage.get(&call).and_then(|u| crate::usage::to_json(u)))?;
+                b.bind(
+                    self.total_usage
+                        .get(&call)
+                        .and_then(|u| crate::usage::to_json(u)),
+                )?;
                 b.bind(row.conflict)
             },
         )
@@ -1676,22 +1730,21 @@ impl Bulk {
         ids.sort_unstable();
         insert_rows(
             tx,
-            "network_span (rec, span_id, defined, thread_id, parent_id, call_path_id, method, url,
+            "network_span (rec, span_id, thread_id, parent_id, call_path_id, method, url,
                request_cas, started_ticks, completed_ticks, outcome, panicked, error_cas, conflict)",
-            15,
+            14,
             &ids,
             |b, span| {
                 let row = &self.network_spans[&span];
                 let def = row.def.as_deref();
                 b.bind(rec)?;
                 b.bind(id(span))?;
-                b.bind(def.is_some())?;
                 b.bind(def.map(|d| id(d.thread)))?;
                 b.bind(def.map(|d| id(d.parent)))?;
                 b.bind(def.and_then(|d| d.path).map(i64::from))?;
                 b.bind(def.map(|d| d.method.as_str()))?;
                 b.bind(def.map(|d| d.url.as_str()))?;
-                b.bind(def.and_then(|d| d.request_cas))?;
+                b.bind(row.done.and_then(|d| d.request_cas))?;
                 b.bind(def.and_then(|d| d.started))?;
                 b.bind(row.done.and_then(|d| d.completed))?;
                 b.bind(row.done.map(|d| d.outcome))?;
@@ -1702,13 +1755,8 @@ impl Bulk {
         )
     }
 
-    /// Events in key order: by span, then recording order.
+    /// Events in key order: by span, then position.
     fn write_network_events(&self, tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
-        let seqs: Vec<i64> = self
-            .network_events
-            .iter()
-            .map(|event| event_seq(event.sequence, event.position))
-            .collect::<Result<_, _>>()?;
         let rows: Vec<usize> = (0..self.network_events.len()).collect();
         insert_rows(
             tx,
@@ -1719,7 +1767,7 @@ impl Bulk {
                 let event = &self.network_events[at];
                 b.bind(rec)?;
                 b.bind(id(event.span))?;
-                b.bind(seqs[at])?;
+                b.bind(event.position)?;
                 b.bind(&event.name)?;
                 b.bind(event.at)?;
                 b.bind(event.payload_cas)

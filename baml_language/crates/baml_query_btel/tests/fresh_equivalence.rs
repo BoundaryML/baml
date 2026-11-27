@@ -269,7 +269,7 @@ mod crafted {
             let sequence = index as u64 + 1;
             file.header = Some(proto::RecordingHeader {
                 format_major: 2,
-                format_minor: 3,
+                format_minor: btel_core::recording::minor::SELF_CONTAINED,
                 recording_id: id.to_vec(),
                 source_snapshot_id: None,
                 process_id: Some(vec![9; 16]),
@@ -372,6 +372,17 @@ mod crafted {
         })
     }
 
+    /// A slim start record of a call.
+    fn start(id: u64, parent: u64, path: u32, entered: u64) -> Event {
+        Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+            id,
+            parent_id: parent,
+            call_path_id: path,
+            entered_at_ticks: entered,
+            ..Default::default()
+        })
+    }
+
     fn section(thread: u64, events: Vec<Event>) -> proto::ThreadSection {
         proto::ThreadSection {
             thread_id: thread,
@@ -401,34 +412,48 @@ mod crafted {
         proto::CasId { low: n, high: 0 }
     }
 
-    fn announce(id: u64, path: u32, method: &str, started: u64) -> Event {
+    /// A slim start record of a request.
+    fn announce(id: u64, parent: u64, path: u32, method: &str, started: u64) -> Event {
         Event::NetworkAnnouncement(proto::NetworkAnnouncement {
             id,
-            parent_id: 100,
+            parent_id: parent,
             call_path_id: path,
             started_at_ticks: started,
             method: method.into(),
             url: "https://api.example.com/v1/messages".into(),
-            request_cas_id: Some(snapshot(id)),
+            request_cas_id: None,
         })
     }
 
-    fn network_event(span: u64, name: &str, at: u64, payload: Option<u64>) -> Event {
-        Event::NetworkEvent(proto::NetworkEvent {
-            span_id: span,
+    fn network_event(name: &str, at: u64, payload: Option<u64>) -> proto::NetworkEvent {
+        proto::NetworkEvent {
+            span_id: 0,
             name: name.into(),
             at_ticks: at,
             payload_cas_id: payload.map(snapshot),
-        })
+        }
     }
 
-    fn network_done(span: u64, at: u64, outcome: proto::InvocationOutcome) -> Event {
+    /// The whole request `span`, made on T2 by call 100 at path 4.
+    fn network_done(
+        span: u64,
+        at: u64,
+        outcome: proto::InvocationOutcome,
+        events: Vec<proto::NetworkEvent>,
+    ) -> Event {
         Event::NetworkCompletion(proto::NetworkCompletion {
             span_id: span,
             completed_at_ticks: at,
             outcome: outcome as i32,
-            panicked: false,
-            error_cas_id: None,
+            thread_id: T2,
+            parent_id: 100,
+            call_path_id: 4,
+            started_at_ticks: 22,
+            method: "GET".into(),
+            url: "https://api.example.com/v1/messages".into(),
+            request_cas_id: Some(snapshot(span)),
+            events,
+            ..Default::default()
         })
     }
 
@@ -445,11 +470,13 @@ mod crafted {
         }
     }
 
-    /// `completion`, carrying the model usage charged to its span.
+    /// `completion`, carrying the model usage charged to its span, which is
+    /// also its total.
     fn charged(event: Event, usage: Vec<proto::ModelUsage>) -> Event {
         match event {
             Event::FunctionCompletion(completion) => {
                 Event::FunctionCompletion(proto::FunctionCompletion {
+                    total_usage: usage.clone(),
                     usage,
                     ..completion
                 })
@@ -465,6 +492,7 @@ mod crafted {
                 call_paths: vec![path(2, 1, Some(CALLER), 12, CALLEE, 1)],
                 threads: vec![thread(T2, Some(T1), 3, 12)],
                 clock_epochs: vec![epoch(1)],
+                slim_functions: Vec::new(),
             }),
             spans: Some(proto::SpanBatch {
                 sections: vec![
@@ -472,24 +500,42 @@ mod crafted {
                         T2,
                         vec![
                             Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
-                            charged(
+                            // Captured type arguments ride the completion.
+                            match charged(
                                 completion(100, T2, 2, 20),
                                 vec![usage("claude-opus-5-5", 1000)],
-                            ),
+                            ) {
+                                Event::FunctionCompletion(done) => {
+                                    Event::FunctionCompletion(proto::FunctionCompletion {
+                                        type_args_cas_id: Some(proto::CasId { low: 3, high: 4 }),
+                                        ..done
+                                    })
+                                }
+                                _ => unreachable!(),
+                            },
+                            // Running when the recording ended.
+                            start(102, T2, 2, 60),
                         ],
                     ),
-                    // A request's events and completion before its announcement.
+                    // A request's completion, before its start record, in
+                    // another thread's section: the whole span.
                     section(
                         T3,
-                        vec![
-                            network_event(200, "data", 30, Some(7)),
-                            network_event(200, "connection", 25, Some(8)),
-                            network_event(0, "data", 26, None),
-                            network_done(200, 40, proto::InvocationOutcome::Ok),
-                            network_event(201, "connection", 24, None),
-                        ],
+                        vec![network_done(
+                            200,
+                            40,
+                            proto::InvocationOutcome::Ok,
+                            vec![
+                                network_event("connection", 25, Some(8)),
+                                network_event("data", 30, Some(7)),
+                                network_event("end", 30, None),
+                                network_event("await", 40, None),
+                            ],
+                        )],
                     ),
                 ],
+                dropped_spans: 0,
+                dropped_network_events: 0,
             }),
             aggregates: Some(proto::AggregateBatch {
                 entries: vec![aggregate(2, 3, 30, 1), aggregate(4, 1, 7, 0)],
@@ -498,6 +544,7 @@ mod crafted {
                     sysops: 2,
                     total_ticks: 6,
                 }],
+                ..proto::AggregateBatch::default()
             }),
             ..Default::default()
         };
@@ -513,6 +560,7 @@ mod crafted {
                 call_paths: vec![path(2, 1, Some(CALLER), 13, CALLEE, 1)],
                 threads: vec![thread(T2, Some(T1), 3, 99)],
                 clock_epochs: vec![epoch(2)],
+                slim_functions: Vec::new(),
             }),
             spans: Some(proto::SpanBatch {
                 sections: vec![
@@ -523,18 +571,15 @@ mod crafted {
                                 completed_at_ticks: 90,
                                 outcome: 1,
                                 usage: vec![usage("unknown-model", 7)],
+                                total_usage: vec![
+                                    usage("claude-opus-5-5", 1000),
+                                    usage("unknown-model", 7),
+                                ],
                                 ..Default::default()
                             }),
-                            // Late: its completion was in the first file.
-                            Event::FunctionAnnouncement(proto::FunctionAnnouncement {
-                                manual: false,
-                                id: 100,
-                                parent_id: T2,
-                                call_path_id: 2,
-                                entered_at_ticks: 21,
-                                inputs_cas_id: None,
-                                type_args_cas_id: Some(proto::CasId { low: 3, high: 4 }),
-                            }),
+                            // Late, and disagreeing: its completion was in
+                            // the first file.
+                            start(100, T2, 2, 21),
                         ],
                     ),
                     section(
@@ -551,27 +596,37 @@ mod crafted {
                     section(
                         T2,
                         vec![
-                            announce(200, 4, "GET", 22),
-                            network_event(200, "end", 30, None),
-                            network_done(200, 41, proto::InvocationOutcome::Ok),
+                            // The same start as its completion's.
+                            announce(200, 100, 4, "GET", 22),
+                            network_done(200, 41, proto::InvocationOutcome::Ok, vec![]),
                             // Never completed, made from a path only it uses.
-                            announce(201, 6, "POST", 23),
-                            network_done(202, 50, proto::InvocationOutcome::Unspecified),
+                            announce(201, 100, 6, "POST", 23),
+                            // Names no parent.
+                            announce(202, 0, 4, "GET", 24),
                         ],
                     ),
                     section(
                         T3,
                         vec![
-                            // Fails with an error, before its definition.
+                            // Fails with an error, before its definition:
+                            // the completion repeats the start.
                             Event::ThreadCompletion(proto::ThreadCompletion {
                                 completed_at_ticks: 70,
                                 outcome: 2,
                                 error_cas_id: Some(snapshot(T3_ERROR)),
+                                parent_id: Some(T1),
+                                spawn_call_path_id: 4,
+                                started_at_ticks: 28,
+                                clock_epoch_id: EPOCH,
+                                name: Some("worker".into()),
+                                running_at_ticks: Some(29),
                                 ..Default::default()
                             }),
                         ],
                     ),
                 ],
+                dropped_spans: 0,
+                dropped_network_events: 0,
             }),
             aggregates: Some(proto::AggregateBatch {
                 entries: vec![aggregate(2, 2, 20, 0), aggregate(4, 1, 5, 3)],
@@ -580,6 +635,7 @@ mod crafted {
                     sysops: 1,
                     total_ticks: 4,
                 }],
+                ..proto::AggregateBatch::default()
             }),
             ..Default::default()
         };
@@ -605,6 +661,7 @@ mod crafted {
                     },
                 ],
                 clock_epochs: vec![],
+                slim_functions: Vec::new(),
             }),
             spans: Some(proto::SpanBatch {
                 sections: vec![section(
@@ -614,15 +671,15 @@ mod crafted {
                             completed_at_ticks: 95,
                             outcome: 2,
                             panicked: true,
-                            usage: Vec::new(),
                             // The first completion is kept, without this error.
                             error_cas_id: Some(snapshot(91)),
+                            ..Default::default()
                         }),
-                        announce(200, 4, "POST", 22),
-                        network_event(200, "await", 41, None),
-                        network_event(201, "data", 60, Some(9)),
+                        announce(200, 100, 4, "POST", 22),
                     ],
                 )],
+                dropped_spans: 0,
+                dropped_network_events: 0,
             }),
             end: Some(proto::RecordingEnd {
                 process_end: Some(proto::ProcessEnd {
@@ -711,13 +768,14 @@ fn late_and_conflicting_evidence_indexes_identically() {
         paths.iter().any(|row| row[1] == Value::Integer(6)),
         "{paths:?}"
     );
+    // The first completion's events; the conflicting second has none.
     let events = &fresh
         .iter()
         .find(|(table, _)| table == "network_event")
         .unwrap()
         .1;
-    assert_eq!(events.len(), 6, "{events:?}");
-    // The late announcement gives its call the type arguments.
+    assert_eq!(events.len(), 4, "{events:?}");
+    // The completion gives its call the type arguments.
     let type_args: Vec<i64> = fresh
         .iter()
         .find(|(table, _)| table == "call")

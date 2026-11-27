@@ -179,13 +179,9 @@ fn writes_exact_publisher_bytes_and_finish_is_idempotent() {
     let read = read_directory(sink.directory()).unwrap();
     assert_eq!(read.files.len(), 3);
     assert!(!read.has_recording_end);
-    assert_eq!(
-        read.issues,
-        vec![ReadIssue::UnresolvedReference {
-            kind: "call path",
-            id: 7
-        }]
-    );
+    // The files' deltas are at a call path no file defines: they wait for
+    // its definition rather than make a file reference what it lacks.
+    assert_eq!(read.issues, Vec::new());
 }
 
 #[test]
@@ -373,7 +369,7 @@ fn recovery_keeps_later_files_when_a_middle_file_is_missing_or_corrupt() {
 }
 
 #[test]
-fn later_definitions_resolve_a_live_prefix_and_wrong_identity_is_rejected() {
+fn a_file_resolves_only_with_its_own_definitions_and_wrong_identity_is_rejected() {
     let root = tempfile::tempdir().unwrap();
     let id = btel_types::new_recording_id();
     let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
@@ -382,7 +378,9 @@ fn later_definitions_resolve_a_live_prefix_and_wrong_identity_is_rejected() {
     let original_bytes = original.bytes().to_vec();
     sender.send(original).unwrap();
     sink.finish().unwrap();
-    assert!(!read_directory(sink.directory()).unwrap().issues.is_empty());
+    // Its delta's call path is not defined: the delta waits for a file that
+    // defines it, so the file references nothing it lacks.
+    assert!(read_directory(sink.directory()).unwrap().issues.is_empty());
     let mut second = proto::RecordingFile::decode(original_bytes.as_slice()).unwrap();
     second.sequence = 2;
     second.aggregates = None;
@@ -412,9 +410,23 @@ fn later_definitions_resolve_a_live_prefix_and_wrong_identity_is_rejected() {
             multiplier: 1,
             ..Default::default()
         }],
+        slim_functions: Vec::new(),
+    });
+    second.clock_states = Some(proto::ClockStateBatch {
+        states: vec![proto::ClockEpochState {
+            epoch_id: 3,
+            status: proto::TimingStatus::Valid as i32,
+            r#final: false,
+        }],
     });
     let path = sink.directory().join("00000000000000000002.btel");
     fs::write(&path, second.encode_to_vec()).unwrap();
+    // The second file resolves its records with its own definitions: a
+    // minor-17 file is read alone.
+    assert_eq!(
+        btel_core::recording::unresolved_definitions(&second),
+        Vec::<(&str, u64)>::new()
+    );
     assert!(read_directory(sink.directory()).unwrap().issues.is_empty());
     second.header.as_mut().unwrap().recording_id =
         btel_types::new_recording_id().as_bytes().to_vec();

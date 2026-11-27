@@ -18,15 +18,22 @@ pub struct RecordingConfig {
     /// Target age from the first processed batch; see [`FILE_FLUSH_INTERVAL_DURATION`].
     /// Checked between batches. Sink backpressure can delay sealing/delivery.
     pub flush_interval_duration: Duration,
+    /// Events one request keeps for its end record; see [`MAX_REQUEST_EVENTS`].
+    pub max_request_events: usize,
 }
 impl Default for RecordingConfig {
     fn default() -> Self {
         Self {
             target_bytes: TARGET_BYTES,
             flush_interval_duration: FILE_FLUSH_INTERVAL_DURATION,
+            max_request_events: MAX_REQUEST_EVENTS,
         }
     }
 }
+/// **Bounds memory per open request.** A request's events (each server-sent event of a
+/// stream is one) wait in memory until it completes, to ride its end record. Past this many
+/// the end record keeps the first ones and counts the rest (`NetworkCompletion.dropped_events`).
+pub const MAX_REQUEST_EVENTS: usize = 10_000;
 /// **Format overhead.** Upper bound for the file header, sequence and outer
 /// protobuf containers. Record bodies use their actual encoded lengths. This
 /// adds at most 128 bytes of conservatism per file, not a charge per record.

@@ -9,6 +9,7 @@ use btel_types::{
 };
 
 use super::*;
+use crate::MAX_HOLDS;
 
 fn nz(n: usize) -> NonZeroUsize {
     NonZeroUsize::new(n).unwrap()
@@ -51,105 +52,17 @@ fn sdk_completion_is_emitted_only_in_the_terminal_file() {
     assert!(flushed.end.is_none());
     assert_eq!(
         flushed.header.unwrap().format_minor,
-        btel_core::recording::minor::PROCESS_CONTEXT
+        btel_core::recording::minor::SELF_CONTAINED
     );
     let ended = decode(&builder.end_recording().unwrap().unwrap());
     assert_eq!(
         ended.header.unwrap().format_minor,
-        btel_core::recording::minor::UNKNOWN_PROCESS_OUTCOME
+        btel_core::recording::minor::SELF_CONTAINED
     );
     let completion = ended.end.unwrap().process_end.unwrap();
     assert_eq!(completion.status, proto::ProcessStatus::Unknown as i32);
     assert_eq!(completion.at_unix_ns, 123);
     assert!(builder.end_recording().unwrap().is_none());
-}
-
-#[test]
-fn metadata_prefix_merges_before_newer_resolution_and_clock_observations() {
-    use proto::function_definition::Resolution;
-
-    let mut builder = RecordingBuilder::new(
-        RecordingId::from_bytes([1; 16]).unwrap(),
-        RecordingConfig::default(),
-    )
-    .unwrap()
-    .with_metadata_replay();
-    builder
-        .buffer
-        .pending
-        .definitions
-        .functions
-        .push(proto::FunctionDefinition {
-            function_id: 1,
-            resolution: Some(Resolution::Unavailable(proto::MetadataUnavailable {})),
-        });
-    builder
-        .buffer
-        .pending
-        .clock_states
-        .states
-        .push(proto::ClockEpochState {
-            epoch_id: 1,
-            status: proto::TimingStatus::Valid as i32,
-            r#final: false,
-        });
-    builder.aggregate(AggregateDelta {
-        count: 7,
-        ..AggregateDelta::default()
-    });
-    let first = builder.flush_recording().unwrap().unwrap();
-    let metadata = proto::RecordingFile::decode(first.metadata_bytes()).unwrap();
-    assert!(metadata.header.is_none());
-    assert_eq!(metadata.sequence, 0);
-    assert!(metadata.spans.is_none());
-    assert!(metadata.aggregates.is_none());
-
-    builder
-        .buffer
-        .pending
-        .definitions
-        .functions
-        .push(proto::FunctionDefinition {
-            function_id: 1,
-            resolution: Some(Resolution::Metadata(proto::FunctionMetadata {
-                fqn: "resolved".into(),
-                ..Default::default()
-            })),
-        });
-    builder
-        .buffer
-        .pending
-        .clock_states
-        .states
-        .push(proto::ClockEpochState {
-            epoch_id: 1,
-            status: proto::TimingStatus::Discontinuity as i32,
-            r#final: true,
-        });
-    builder.aggregate(AggregateDelta {
-        count: 2,
-        ..AggregateDelta::default()
-    });
-    let mut second = builder.flush_recording().unwrap().unwrap();
-    let fresh = second.metadata_bytes().to_vec();
-    second.prepend_metadata(std::iter::once(first.metadata_bytes()));
-    assert_eq!(second.metadata_bytes(), fresh);
-    let decoded = proto::RecordingFile::decode(second.bytes()).unwrap();
-    let definitions = decoded.definitions.unwrap().functions;
-    assert!(matches!(
-        definitions[0].resolution,
-        Some(Resolution::Unavailable(_))
-    ));
-    assert!(matches!(
-        definitions[1].resolution,
-        Some(Resolution::Metadata(_))
-    ));
-    let states = decoded.clock_states.unwrap().states;
-    assert_eq!(states.len(), 2);
-    assert_eq!(states[0].status, proto::TimingStatus::Valid as i32);
-    assert_eq!(states[1].status, proto::TimingStatus::Discontinuity as i32);
-    assert!(states[1].r#final);
-    assert_eq!(decoded.aggregates.unwrap().entries[0].count, 2);
 }
 
 #[test]
@@ -188,7 +101,7 @@ fn encoding_reservation_rejects_addition_overflow() {
     builder.admit_spans().unwrap();
     builder.buffer.spans.event(
         allocate_telemetry_id(),
-        proto::span_event::Event::FunctionCompletion(proto::FunctionCompletion::default()),
+        &proto::span_event::Event::FunctionCompletion(proto::FunctionCompletion::default()),
     );
     assert_eq!(
         builder.reserve_encoding(usize::MAX),
@@ -248,33 +161,68 @@ fn delta(path: CallPathId) -> AggregateDelta {
         ..Default::default()
     }
 }
+/// Defines `path`, on a thread of its own, so aggregates of it are written
+/// in the file they arrive in.
+fn define_path(builder: &mut RecordingBuilder, path: CallPathId) {
+    let thread = allocate_telemetry_id();
+    // A run whose only thread finished: its clock is settled, so the
+    // recording can end.
+    let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
+    clock.attach_thread();
+    clock.finish_thread();
+    builder.span_reference(
+        thread,
+        &SpanRecord::ThreadSpanAnnouncement {
+            id: thread,
+            parent_id: None,
+            spawn_call_path: CallPathId::ROOT,
+            started_at: ClockInstant::from_ticks(1),
+            clock,
+            name: None,
+        },
+    );
+    builder.span_reference(
+        thread,
+        &SpanRecord::CallPathDefined {
+            call_path: path,
+            parent_call_path: CallPathId::ROOT,
+            visible_caller: None,
+            caller_pc: 0,
+            callee: FunctionIdAllocator::default().allocate().unwrap(),
+            edge: btel_types::CallPathEdge::Synchronous,
+        },
+    );
+}
+
 fn decode(file: &SealedFile) -> proto::RecordingFile {
     proto::RecordingFile::decode(file.bytes()).unwrap()
 }
 
 #[test]
-fn aggregates_seal_before_definitions_without_rewriting_earlier_files() {
+fn an_aggregate_before_its_paths_definition_waits_one_file() {
     let files = RefCell::new(Vec::new());
     let (thread, function, path) = ids();
     let id = btel_types::new_recording_id();
     let mut p = RecordingPublisher::new(id, config(), |f| files.borrow_mut().push(f)).unwrap();
     p.aggregate(delta(path));
     p.flush();
+    // Its path is not defined yet: the delta waits for the next file.
     let first = decode(&files.borrow()[0]);
     assert_eq!(first.sequence, 1);
     assert_eq!(first.header.unwrap().recording_id, id.as_bytes());
-    assert_eq!(first.aggregates.unwrap().entries[0].count, 2);
+    assert!(first.aggregates.unwrap().entries.is_empty());
     assert!(first.definitions.unwrap().call_paths.is_empty());
     let original = files.borrow()[0].bytes().to_vec();
     metadata(&mut p, thread, function, path);
     p.flush();
+    // The definition arrived: the delta rides the file that defines its path.
     let second = decode(&files.borrow()[1]);
     assert_eq!(second.sequence, 2);
     assert_eq!(
         second.definitions.unwrap().call_paths[0].call_path_id,
         path.get()
     );
-    assert!(second.aggregates.unwrap().entries.is_empty());
+    assert_eq!(second.aggregates.unwrap().entries[0].count, 2);
     assert_eq!(files.borrow()[0].bytes(), original);
     p.flush_recording().unwrap();
     assert_eq!(
@@ -292,6 +240,8 @@ fn spans_and_announcements_forward_without_parent_or_definition_lookups() {
         files.borrow_mut().push(f);
     })
     .unwrap();
+    // This test is about encoding: records of undefined paths are written.
+    p.builder.buffer.write_undefined = true;
     let parent = allocate_telemetry_id();
     let child = allocate_telemetry_id();
     let completion = |id, parent_id| SpanRecord::FunctionSpanCompletionOk {
@@ -334,12 +284,10 @@ fn spans_and_announcements_forward_without_parent_or_definition_lookups() {
         .sections
         .remove(0)
         .events;
-    assert_eq!(events.len(), 2);
+    // It started and completed in one file: no start record.
+    assert_eq!(events.len(), 1);
     assert!(
-        matches!(&events[0].event, Some(proto::span_event::Event::FunctionAnnouncement(f)) if f.id == parent.get())
-    );
-    assert!(
-        matches!(&events[1].event, Some(proto::span_event::Event::FunctionCompletion(f)) if f.id == parent.get())
+        matches!(&events[0].event, Some(proto::span_event::Event::FunctionCompletion(f)) if f.id == parent.get())
     );
     assert_eq!(
         files.borrow().len(),
@@ -538,23 +486,32 @@ fn thread_lifecycle_and_clock_observations_are_forwarded_without_deduplication()
     );
     p.flush_recording().unwrap();
     let file = decode(&files.borrow()[0]);
+    // The thread is defined once in the file; its completion carries its
+    // start fields itself.
     let definitions = file.definitions.unwrap();
-    assert_eq!(definitions.threads.len(), 2);
-    assert_eq!(definitions.clock_epochs.len(), 2);
+    assert_eq!(definitions.threads.len(), 1);
+    assert_eq!(definitions.clock_epochs.len(), 1);
     let states = file.clock_states.unwrap().states;
     assert_eq!(states.len(), 2);
     assert_eq!(states[0].status, proto::TimingStatus::Valid as i32);
     assert_eq!(states[1].status, proto::TimingStatus::Restored as i32);
     assert!(states.iter().all(|s| !s.r#final));
+    // It started and completed in one file: no start record.
     let events = file.spans.unwrap().sections.remove(0).events;
-    assert!(matches!(
-        events[0].event,
-        Some(proto::span_event::Event::ThreadAnnouncement(_))
-    ));
-    assert!(matches!(
-        events[1].event,
-        Some(proto::span_event::Event::ThreadCompletion(_))
-    ));
+    assert_eq!(events.len(), 1);
+    let Some(proto::span_event::Event::ThreadCompletion(done)) = &events[0].event else {
+        panic!("a thread completion");
+    };
+    assert_eq!(done.started_at_ticks, 1);
+    assert_eq!(done.clock_epoch_id, epoch.metadata().epoch.get());
+    assert_eq!(done.parent_id, None);
+    assert_eq!(
+        done.lineage,
+        Some(proto::Lineage {
+            depth: 0,
+            truncated_ancestor_span_ids: Vec::new(),
+        })
+    );
     epoch.finish_thread();
 }
 
@@ -569,6 +526,8 @@ fn encoded_sections_survive_growth_and_thread_switches() {
         },
     )
     .unwrap();
+    // This test is about encoding: records of undefined paths are written.
+    p.builder.buffer.write_undefined = true;
     let a = allocate_telemetry_id();
     let b = allocate_telemetry_id();
     let path = CallPathId::new_non_root(u32::MAX).unwrap();
@@ -658,6 +617,8 @@ fn batch_reservation_is_lazy_and_sealing_invalidates_unused_credit() {
         },
     )
     .unwrap();
+    // This test is about encoding: records of undefined paths are written.
+    p.builder.buffer.write_undefined = true;
     let (thread, _, path) = ids();
     let mut event = SpanRecord::FunctionSpanAnnouncement {
         id: allocate_telemetry_id(),
@@ -701,11 +662,12 @@ fn batch_reservation_is_lazy_and_sealing_invalidates_unused_credit() {
     );
     p.after_batch(1);
     p.flush();
+    // One call announced nine times is one span, open when the file sealed.
     assert_eq!(
         decode(&files.borrow()[0]).spans.unwrap().sections[0]
             .events
             .len(),
-        9
+        1
     );
     assert_eq!(
         decode(&files.borrow()[1]).spans.unwrap().sections[0]
@@ -724,6 +686,8 @@ fn size_hint_tracks_encoded_bodies_including_merge_growth_and_overflow() {
     })
     .unwrap()
     .with_source_snapshot(Some([255; 32]));
+    // This test is about encoding: records of undefined paths are written.
+    p.builder.buffer.write_undefined = true;
     // Cover a span-only file, a mixed file and an aggregate-only file. In each,
     // compare the cached hint with actual output, including protobuf wrappers.
     for round in 0..3 {
@@ -825,6 +789,15 @@ fn population_outcomes_include_timing_only_calls_and_count_forwarded_spans_once(
     let mut producer = pool.register_producer().unwrap();
     let thread = allocate_telemetry_id();
     let path = CallPathId::new_non_root(7).unwrap();
+    producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });
+    producer.write_span(SpanRecord::CallPathDefined {
+        call_path: path,
+        parent_call_path: CallPathId::ROOT,
+        visible_caller: None,
+        caller_pc: 0,
+        callee: FunctionIdAllocator::default().allocate().unwrap(),
+        edge: btel_types::CallPathEdge::Synchronous,
+    });
     producer.write_timing(btel_records::TimingRecord::ThreadSelected { thread_id: thread });
     for (outcome, reentry) in [
         (InvocationOutcome::Ok, false),
@@ -953,7 +926,9 @@ fn thread_heavy_files_seal_near_the_encoded_target() {
     let files = files.borrow();
     assert_eq!(files.len(), 1);
     assert!(bytes_before_last_batch < target);
-    assert!(files[0].bytes().len() >= target - settings::FILE_ENVELOPE_BYTES);
+    // Start records of threads still running are written as the file seals:
+    // until then their size is estimated, within a few percent.
+    assert!(files[0].bytes().len() >= target - target / 32);
     // A full batch can cross the soft threshold, but not by a factor of four.
     assert!(files[0].bytes().len() < target + 4096);
 }
@@ -981,6 +956,8 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
         |snapshot| received.borrow_mut().push(crate::cas_id(&snapshot)),
     )
     .unwrap();
+    // This test is about encoding: records of undefined paths are written.
+    p.builder.buffer.write_undefined = true;
     let snapshots = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let capture = |value| {
         let snapshot = snapshots.try_acquire().unwrap().finish(
@@ -1010,8 +987,9 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
     let file = decode(&files.borrow()[0]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_core::recording::minor::TYPE_ARGS
+        btel_core::recording::minor::SELF_CONTAINED
     );
+    // A local recording's start record is slim: the completion carries both.
     let event = file.spans.unwrap().sections.remove(0).events.remove(0);
     assert_eq!(
         event.event,
@@ -1021,30 +999,25 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
             parent_id: thread.get(),
             call_path_id: path.get(),
             entered_at_ticks: 1,
-            inputs_cas_id: Some(inputs_id),
-            type_args_cas_id: Some(type_args_id),
+            inputs_cas_id: None,
+            type_args_cas_id: None,
         }))
     );
-
-    // A call without type arguments keeps its file at the base minor.
     p.span(
         thread,
-        &mut SpanRecord::FunctionSpanAnnouncement {
-            id: allocate_telemetry_id(),
+        &mut SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+            id,
             parent_id: thread,
             call_path: path,
-            entered_at: ClockInstant::from_ticks(2),
-            captured_inputs: None,
-            captured_type_args: None,
+            entered_at: ClockInstant::from_ticks(1),
+            exited_at: ClockInstant::from_ticks(2),
+            await_time: AwaitDuration::ZERO,
+            captured_value: None,
         },
     );
     p.flush_recording().unwrap();
     let file = decode(&files.borrow()[1]);
-    assert_eq!(
-        file.header.unwrap().format_minor,
-        btel_core::recording::minor::BASE
-    );
-    let Some(Event::FunctionAnnouncement(entry)) = file
+    let Some(Event::FunctionCompletion(done)) = file
         .spans
         .unwrap()
         .sections
@@ -1053,13 +1026,20 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
         .remove(0)
         .event
     else {
-        panic!("announcement");
+        panic!("completion");
     };
-    assert_eq!(entry.type_args_cas_id, None);
+    assert_eq!(done.inputs_cas_id, Some(inputs_id));
+    assert_eq!(done.type_args_cas_id, Some(type_args_id));
+    // It needs nothing of the announcement: no flag says so.
+    assert!(
+        !btel_core::recording::CompletionFlags::from_wire(done.completion_flags, false)
+            .unwrap()
+            .requires_announcement()
+    );
 }
 
 #[test]
-fn network_spans_round_trip_at_minor_seven() {
+fn a_request_rides_its_completion_whole_with_its_events() {
     use btel_records::{
         NetworkAnnouncement, NetworkCompletion, NetworkEventName, NetworkEventRecord,
     };
@@ -1071,6 +1051,8 @@ fn network_spans_round_trip_at_minor_seven() {
         files.borrow_mut().push(f);
     })
     .unwrap();
+    // This test is about encoding: records of undefined paths are written.
+    p.builder.buffer.write_undefined = true;
     let span = allocate_telemetry_id();
     // Longer than a fixed event: the strings reserve their own bytes.
     let url = format!(
@@ -1089,6 +1071,8 @@ fn network_spans_round_trip_at_minor_seven() {
     let (request, request_id) = capture(1);
     let (payload, payload_id) = capture(2);
     let (error, error_id) = capture(3);
+    let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
+    p.span(thread, &mut thread_record(thread, &clock, false));
     p.span(
         thread,
         &mut SpanRecord::NetworkSpanAnnouncement(Box::new(NetworkAnnouncement {
@@ -1116,6 +1100,8 @@ fn network_spans_round_trip_at_minor_seven() {
             })),
         );
     }
+    // The completion seals in a later file than the start: it carries all.
+    p.flush_recording().unwrap();
     p.span(
         thread,
         &mut SpanRecord::NetworkSpanCompletion(Box::new(NetworkCompletion {
@@ -1126,69 +1112,84 @@ fn network_spans_round_trip_at_minor_seven() {
         })),
     );
     p.flush_recording().unwrap();
-    let file = decode(&files.borrow()[0]);
-    assert_eq!(
-        file.header.unwrap().format_minor,
-        btel_core::recording::minor::NETWORK
-    );
-    let section = file.spans.unwrap().sections.remove(0);
-    assert_eq!(section.thread_id, thread.get());
-    let events = section
-        .events
-        .into_iter()
-        .map(|event| event.event.unwrap())
+    let files = files.borrow();
+    let first = decode(&files[0]);
+    let started = first
+        .spans
+        .iter()
+        .flat_map(|spans| &spans.sections)
+        .flat_map(|section| &section.events)
+        .filter_map(|event| event.event.clone())
+        .filter(|event| !matches!(event, Event::ThreadAnnouncement(_)))
         .collect::<Vec<_>>();
-    let event = |name: &str, at_ticks, payload_cas_id| {
-        Event::NetworkEvent(proto::NetworkEvent {
-            span_id: span.get(),
-            name: name.to_owned(),
-            at_ticks,
-            payload_cas_id,
-        })
+    // Open when the first file sealed: a slim start, without the request,
+    // which the completion carries.
+    assert_eq!(
+        started,
+        [Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+            id: span.get(),
+            parent_id: thread.get(),
+            call_path_id: path.get(),
+            started_at_ticks: 1,
+            method: "POST".to_owned(),
+            url: url.clone(),
+            request_cas_id: None,
+        })]
+    );
+    let second = decode(&files[1]);
+    assert_eq!(
+        second.header.as_ref().unwrap().format_minor,
+        btel_core::recording::minor::SELF_CONTAINED
+    );
+    let section = second.spans.clone().unwrap().sections.remove(0);
+    let event = |name: &str, at_ticks, payload_cas_id| proto::NetworkEvent {
+        span_id: 0,
+        name: name.to_owned(),
+        at_ticks,
+        payload_cas_id,
     };
     assert_eq!(
-        events,
-        [
-            Event::NetworkAnnouncement(proto::NetworkAnnouncement {
-                id: span.get(),
-                parent_id: thread.get(),
-                call_path_id: path.get(),
-                started_at_ticks: 1,
-                method: "POST".to_owned(),
-                url,
-                request_cas_id: Some(request_id),
+        section
+            .events
+            .into_iter()
+            .map(|event| event.event.unwrap())
+            .collect::<Vec<_>>(),
+        [Event::NetworkCompletion(proto::NetworkCompletion {
+            span_id: span.get(),
+            completed_at_ticks: 5,
+            outcome: proto::InvocationOutcome::Errored as i32,
+            panicked: true,
+            error_cas_id: Some(error_id),
+            thread_id: thread.get(),
+            parent_id: thread.get(),
+            call_path_id: path.get(),
+            started_at_ticks: 1,
+            method: "POST".to_owned(),
+            url,
+            request_cas_id: Some(request_id),
+            events: vec![
+                event("connection", 2, Some(payload_id)),
+                event("data", 3, None),
+                event("message_in", 4, None),
+            ],
+            lineage: Some(proto::Lineage {
+                depth: 1,
+                truncated_ancestor_span_ids: vec![thread.get()],
             }),
-            event("connection", 2, Some(payload_id)),
-            event("data", 3, None),
-            event("message_in", 4, None),
-            Event::NetworkCompletion(proto::NetworkCompletion {
-                span_id: span.get(),
-                completed_at_ticks: 5,
-                outcome: proto::InvocationOutcome::Errored as i32,
-                panicked: true,
-                error_cas_id: Some(error_id),
-            }),
-        ]
+            dropped_events: 0,
+        })]
     );
-
-    // The minor belongs to the file that uses it.
-    p.span(
-        thread,
-        &mut SpanRecord::FunctionSpanCompletionOk {
-            id: allocate_telemetry_id(),
-            parent_id: thread,
-            call_path: path,
-            entered_at: ClockInstant::from_ticks(1),
-            exited_at: ClockInstant::from_ticks(2),
-            await_time: AwaitDuration::ZERO,
-            captured_value: None,
-        },
-    );
-    p.flush_recording().unwrap();
-    assert_eq!(
-        decode(&files.borrow()[1]).header.unwrap().format_minor,
-        btel_core::recording::minor::BASE
-    );
+    // The thread was defined in the first file, and again in the second,
+    // which is read alone.
+    let threads = |file: &proto::RecordingFile| {
+        file.definitions
+            .iter()
+            .flat_map(|definitions| &definitions.threads)
+            .map(|definition| definition.thread_id)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(threads(&first), [thread.get()]);
+    assert_eq!(threads(&second), [thread.get()]);
 }
 
 #[test]
@@ -1201,6 +1202,8 @@ fn span_usage_rides_its_completion_at_minor_eleven() {
         files.borrow_mut().push(f);
     })
     .unwrap();
+    // This test is about encoding: records of undefined paths are written.
+    p.builder.buffer.write_undefined = true;
     let span = allocate_telemetry_id();
     let entry = btel_records::ModelUsage {
         provider: "anthropic".into(),
@@ -1216,7 +1219,8 @@ fn span_usage_rides_its_completion_at_minor_eleven() {
         thread,
         &mut SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
             node: span,
-            entries: vec![entry],
+            entries: vec![entry.clone()],
+            total: vec![entry],
         })),
     );
     // Usage alone seals nothing: it waits for its node's completion, even
@@ -1239,7 +1243,7 @@ fn span_usage_rides_its_completion_at_minor_eleven() {
     let file = decode(&files.borrow()[0]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_core::recording::minor::MODEL_USAGE
+        btel_core::recording::minor::SELF_CONTAINED
     );
     let event = file
         .spans
@@ -1319,6 +1323,9 @@ fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() 
         },
     )
     .unwrap();
+    let mut publisher = publisher;
+    // This test is about encoding: records of undefined paths are written.
+    publisher.builder.buffer.write_undefined = true;
     let mut processor =
         Processor::with_publisher(chunks.bind_consumer().unwrap(), nz(8), publisher);
     processor.process_available();
@@ -1338,8 +1345,10 @@ fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() 
         else {
             panic!()
         };
-        assert_eq!(entry.inputs_cas_id, Some(expected));
+        // The start record is slim; the inputs ride the completion.
+        assert_eq!(entry.inputs_cas_id, None);
     }
+    let _ = expected;
 }
 
 #[test]
@@ -1415,6 +1424,8 @@ fn known_function_metadata_is_published_once_and_unknown_functions_stay_placehol
     .unwrap()
     .with_function_metadata(table);
     let thread = allocate_telemetry_id();
+    let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
+    p.span(thread, &mut thread_record(thread, &clock, false));
     let define = |p: &mut RecordingPublisher<_>, path: u32, callee| {
         p.span(
             thread,
@@ -1428,20 +1439,33 @@ fn known_function_metadata_is_published_once_and_unknown_functions_stay_placehol
             },
         );
     };
+    // Each path is referenced by an aggregate in the file that defines it.
+    let refer = |p: &mut RecordingPublisher<_>, path: u32| {
+        p.aggregate(delta(CallPathId::new_non_root(path).unwrap()));
+    };
     define(&mut p, 1, known);
     define(&mut p, 2, unknown);
+    refer(&mut p, 1);
+    refer(&mut p, 2);
     p.flush();
     define(&mut p, 3, known);
     define(&mut p, 4, unknown);
+    refer(&mut p, 3);
+    refer(&mut p, 4);
     p.flush_recording().unwrap();
-    let definitions = |index: usize| {
-        decode(&files.borrow()[index])
-            .definitions
-            .unwrap()
-            .functions
-    };
+    let definitions = |index: usize| decode(&files.borrow()[index]).definitions.unwrap();
     let first = definitions(0);
-    assert_eq!(first.len(), 2);
+    // The unknown function's placeholder names it in the file; it has no
+    // full definition.
+    assert!(matches!(
+        &first.slim_functions[..],
+        [proto::FunctionDefinition {
+            resolution: Some(Resolution::Unavailable(_)),
+            ..
+        }]
+    ));
+    let first = first.functions;
+    assert_eq!(first.len(), 1);
     let Some(Resolution::Metadata(m)) = &first[0].resolution else {
         panic!("known function must carry metadata: {first:?}")
     };
@@ -1451,16 +1475,30 @@ fn known_function_metadata_is_published_once_and_unknown_functions_stay_placehol
     );
     let layout = m.argument_layout.as_ref().unwrap();
     assert_eq!(layout.slots[0].name.as_deref(), Some("customer"));
-    assert!(matches!(
-        first[1].resolution,
-        Some(Resolution::Unavailable(_))
-    ));
-    // The second file resolves `known` through the first file's definition.
+    // The second file names `known` with its slim definition, and `unknown`
+    // with its placeholder again.
     let second = definitions(1);
-    assert_eq!(second.len(), 1);
-    assert_eq!(second[0].function_id, unknown.get());
+    assert!(second.functions.is_empty());
+    let mut slim = second.slim_functions;
+    slim.sort_by_key(|definition| definition.function_id);
+    assert_eq!(slim.len(), 2);
+    let Some(Resolution::Metadata(m)) = &slim[0].resolution else {
+        panic!("a slim definition: {slim:?}")
+    };
+    assert_eq!(
+        (
+            slim[0].function_id,
+            m.fqn.as_str(),
+            m.source_file.as_deref()
+        ),
+        (known.get(), "user.Extract", None)
+    );
+    assert_eq!(
+        m.argument_layout.as_ref().unwrap().slots[0].name.as_deref(),
+        Some("customer")
+    );
     assert!(matches!(
-        second[0].resolution,
+        slim[1].resolution,
         Some(Resolution::Unavailable(_))
     ));
 }
@@ -1559,6 +1597,7 @@ fn an_empty_recording_ends_with_a_header_only_file() {
 fn already_sealed_data_is_followed_by_an_end_only_file() {
     let (_, _, path) = ids();
     let mut builder = RecordingBuilder::new(btel_types::new_recording_id(), config()).unwrap();
+    define_path(&mut builder, path);
     builder.aggregate(delta(path));
     let data = decode(&builder.flush_recording().unwrap().unwrap());
     assert!(data.end.is_none());
@@ -1693,6 +1732,9 @@ fn processor_ends_the_recording_only_after_producers_stop_writing() {
             send.send(file).unwrap();
         })
         .unwrap();
+        let mut p = p;
+        // This test is about encoding: records of undefined paths are written.
+        p.builder.buffer.write_undefined = true;
         Processor::with_publisher(copy.bind_consumer().unwrap(), nz(8), p).run()
     });
     let runtime = Arc::new(ClockRuntime::new(ClockMode::Monotonic));
@@ -1775,6 +1817,8 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
         |_| {},
     )
     .unwrap();
+    // This test is about encoding: records of undefined paths are written.
+    p.builder.buffer.write_undefined = true;
     p.span(
         thread,
         &mut SpanRecord::ManualSpanAnnouncement(Box::new(btel_records::ManualSpanAnnouncement {
@@ -1790,7 +1834,7 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     let file = decode(&files.borrow()[0]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_core::recording::minor::OWNED_SPAN
+        btel_core::recording::minor::SELF_CONTAINED
     );
     let Some(Event::FunctionAnnouncement(entry)) = file
         .spans
@@ -1804,7 +1848,8 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
         panic!("owned entry must use a function announcement");
     };
     assert!(!entry.manual);
-    assert!(entry.type_args_cas_id.is_some());
+    // The start record is slim: the completion carries the type arguments.
+    assert!(entry.type_args_cas_id.is_none());
     p.span(
         thread,
         &mut SpanRecord::ManualSpanCompletion(Box::new(btel_records::ManualSpanCompletion {
@@ -1823,7 +1868,7 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     let file = decode(&files.borrow()[1]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_core::recording::minor::OWNED_SPAN
+        btel_core::recording::minor::SELF_CONTAINED
     );
     let Some(Event::FunctionCompletion(done)) = file
         .spans
@@ -1836,7 +1881,8 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     else {
         panic!("owned completion must use a function completion");
     };
-    assert_eq!(done.completion_flags, 16 | 8);
+    assert_eq!(done.completion_flags, 16);
+    assert!(done.type_args_cas_id.is_some());
     assert_eq!(done.self_await_ticks, 4);
     assert_eq!(done.exited_at_ticks, 9);
 }
@@ -1905,8 +1951,11 @@ fn package_identity_and_build_provenance_are_recorded() {
                     compilation_unit_hash: [7; 32],
                 }),
             });
+        let thread = allocate_telemetry_id();
+        let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
+        publisher.span(thread, &mut thread_record(thread, &clock, false));
         publisher.span(
-            allocate_telemetry_id(),
+            thread,
             &mut SpanRecord::CallPathDefined {
                 call_path: CallPathId::new_non_root(1).unwrap(),
                 parent_call_path: CallPathId::ROOT,
@@ -1916,6 +1965,7 @@ fn package_identity_and_build_provenance_are_recorded() {
                 edge: btel_types::CallPathEdge::Synchronous,
             },
         );
+        publisher.aggregate(delta(CallPathId::new_non_root(1).unwrap()));
         publisher.flush_recording().unwrap();
         let file = decode(&files.borrow()[0]);
         let header = file.header.unwrap();
@@ -1935,7 +1985,7 @@ fn package_identity_and_build_provenance_are_recorded() {
     assert_eq!(definition.compilation_unit_hash, Some(vec![7; 32]));
     assert_eq!(
         header.format_minor,
-        btel_core::recording::minor::PROCESS_PLATFORM
+        btel_core::recording::minor::SELF_CONTAINED
     );
 
     let (header, definition) = record(false);
@@ -1945,7 +1995,7 @@ fn package_identity_and_build_provenance_are_recorded() {
     assert_eq!(definition.compilation_unit_hash, Some(vec![7; 32]));
     assert_eq!(
         header.format_minor,
-        btel_core::recording::minor::PACKAGE_IDENTITY
+        btel_core::recording::minor::SELF_CONTAINED
     );
 }
 
@@ -2002,6 +2052,8 @@ fn a_log_carries_its_line_and_raises_the_file_minor_only_with_one() {
     })
     .unwrap()
     .with_function_metadata(table);
+    // This test is about encoding: records of undefined paths are written.
+    p.builder.buffer.write_undefined = true;
     let thread = allocate_telemetry_id();
     // One log per file: (function, pc) and the line the event must carry.
     let cases = [
@@ -2032,14 +2084,10 @@ fn a_log_carries_its_line_and_raises_the_file_minor_only_with_one() {
     assert_eq!(files.len(), cases.len());
     for (file, (function, pc, line)) in files.iter().zip(cases) {
         let file = decode(file);
-        // A file without a line stays readable at the minor logs came with.
+        // Every file is at least minor 16, which has log lines.
         assert_eq!(
             file.header.unwrap().format_minor,
-            if line.is_some() {
-                btel_core::recording::minor::LOG_LINE
-            } else {
-                btel_core::recording::minor::LOG
-            },
+            btel_core::recording::minor::SELF_CONTAINED,
             "pc {pc}"
         );
         let Some(Event::Log(log)) = file
@@ -2132,7 +2180,7 @@ fn a_thread_error_travels_on_its_threads_completion_and_raises_the_file_minor() 
             }
         })
         .collect();
-    let base = btel_core::recording::minor::BASE;
+    let base = btel_core::recording::minor::SELF_CONTAINED;
     assert_eq!(
         completions
             .iter()
@@ -2141,7 +2189,7 @@ fn a_thread_error_travels_on_its_threads_completion_and_raises_the_file_minor() 
         vec![
             (base, plain.get(), None, false),
             (
-                btel_core::recording::minor::THREAD_ERROR,
+                btel_core::recording::minor::SELF_CONTAINED,
                 failed.get(),
                 Some(error_id),
                 true
@@ -2149,4 +2197,763 @@ fn a_thread_error_travels_on_its_threads_completion_and_raises_the_file_minor() 
             (base, uncaptured.get(), None, false),
         ]
     );
+}
+
+/// Every event of a file's span sections.
+fn events(file: &proto::RecordingFile) -> Vec<proto::span_event::Event> {
+    file.spans
+        .iter()
+        .flat_map(|spans| &spans.sections)
+        .flat_map(|section| &section.events)
+        .filter_map(|event| event.event.clone())
+        .collect()
+}
+
+#[test]
+fn a_call_is_whole_in_its_end_record_and_a_start_only_while_open_at_seal() {
+    use proto::span_event::Event;
+
+    let files = RefCell::new(Vec::new());
+    let (thread, function, path) = ids();
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap();
+    metadata(&mut p, thread, function, path);
+    let (outer, inner) = (allocate_telemetry_id(), allocate_telemetry_id());
+    for (id, parent) in [(outer, thread), (inner, outer)] {
+        p.span(
+            thread,
+            &mut SpanRecord::FunctionSpanAnnouncement {
+                id,
+                parent_id: parent,
+                call_path: path,
+                entered_at: ClockInstant::from_ticks(1),
+                captured_inputs: Some(snapshot()),
+                captured_type_args: None,
+            },
+        );
+    }
+    p.flush_recording().unwrap();
+    // The inner call's usage, then the outer's own and its total.
+    let usage = |calls| btel_records::ModelUsage {
+        provider: "openai".into(),
+        model: None,
+        calls,
+        input_tokens: None,
+        output_tokens: None,
+        cache_read_tokens: None,
+        cache_write_tokens: None,
+        reasoning_tokens: None,
+    };
+    for (id, parent, own, total) in [(inner, outer, 2, 2), (outer, thread, 1, 3)] {
+        p.span(
+            thread,
+            &mut SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
+                node: id,
+                entries: vec![usage(own)],
+                total: vec![usage(total)],
+            })),
+        );
+        p.span(
+            thread,
+            &mut SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+                id,
+                parent_id: parent,
+                call_path: path,
+                entered_at: ClockInstant::from_ticks(1),
+                exited_at: ClockInstant::from_ticks(5),
+                await_time: AwaitDuration::ZERO,
+                captured_value: None,
+            },
+        );
+    }
+    p.flush_recording().unwrap();
+    let files = files.borrow();
+    let starts = events(&decode(&files[0]))
+        .into_iter()
+        .filter(|event| {
+            matches!(
+                event,
+                Event::FunctionAnnouncement(_) | Event::ThreadAnnouncement(_)
+            )
+        })
+        .count();
+    // The thread and both calls were open when the first file sealed.
+    assert_eq!(starts, 3);
+    let second = decode(&files[1]);
+    // The thread, its path and its function are defined again: the second
+    // file is read alone, and carries no start of the calls it completes.
+    assert_eq!(
+        btel_core::recording::unresolved_definitions(&second),
+        Vec::<(&str, u64)>::new()
+    );
+    let completions = events(&second)
+        .into_iter()
+        .map(|event| match event {
+            Event::FunctionCompletion(done) => done,
+            other => panic!("only completions: {other:?}"),
+        })
+        .collect::<Vec<_>>();
+    let [inner_done, outer_done] = &completions[..] else {
+        panic!("two completions");
+    };
+    assert!(inner_done.inputs_cas_id.is_some());
+    assert_eq!(
+        inner_done.lineage,
+        Some(proto::Lineage {
+            depth: 2,
+            truncated_ancestor_span_ids: vec![outer.get(), thread.get()],
+        })
+    );
+    assert_eq!(outer_done.lineage.as_ref().unwrap().depth, 1);
+    let calls = |entries: &[proto::ModelUsage]| entries.iter().map(|e| e.calls).sum::<u64>();
+    assert_eq!(
+        (calls(&outer_done.usage), calls(&outer_done.total_usage)),
+        (1, 3)
+    );
+    assert_eq!(
+        (calls(&inner_done.usage), calls(&inner_done.total_usage)),
+        (2, 2)
+    );
+}
+
+#[test]
+fn every_file_defines_what_its_records_reference() {
+    let files = RefCell::new(Vec::new());
+    let (thread, function, path) = ids();
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap();
+    metadata(&mut p, thread, function, path);
+    p.span(
+        thread,
+        &mut SpanRecord::LateFunctionSpanCompletionOk {
+            id: allocate_telemetry_id(),
+            parent_id: thread,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            exited_at: ClockInstant::from_ticks(2),
+            await_time: AwaitDuration::ZERO,
+            captured_value: None,
+        },
+    );
+    p.flush_recording().unwrap();
+    // A later file with only an aggregate defines its path, the path's
+    // function and thread, and the thread's clock.
+    p.aggregate(delta(path));
+    p.flush_recording().unwrap();
+    let files = files.borrow();
+    for file in files.iter() {
+        assert_eq!(
+            btel_core::recording::unresolved_definitions(&decode(file)),
+            Vec::<(&str, u64)>::new()
+        );
+    }
+    let aggregated = decode(&files[1]).definitions.unwrap();
+    assert_eq!(aggregated.call_paths.len(), 1);
+    assert_eq!(aggregated.threads.len(), 1);
+    assert_eq!(aggregated.clock_epochs.len(), 1);
+    // The function was defined in full in the first file: the second has
+    // its slim definition.
+    assert!(aggregated.functions.is_empty());
+    assert_eq!(aggregated.slim_functions.len(), 1);
+    // The late call takes its place under its parent without a start record.
+    let Some(done) = events(&decode(&files[0]))
+        .into_iter()
+        .find_map(|event| match event {
+            proto::span_event::Event::LateFunctionCompletion(done) => Some(done),
+            _ => None,
+        })
+    else {
+        panic!("a late completion");
+    };
+    assert_eq!(done.lineage.unwrap().depth, 1);
+}
+
+#[test]
+fn a_futures_end_record_carries_its_start_its_run_and_its_place_under_its_spawner() {
+    use proto::span_event::Event;
+
+    let files = RefCell::new(Vec::new());
+    let (root, function, path) = ids();
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap();
+    metadata(&mut p, root, function, path);
+    let (spawner, future) = (allocate_telemetry_id(), allocate_telemetry_id());
+    p.span(
+        root,
+        &mut SpanRecord::FunctionSpanAnnouncement {
+            id: spawner,
+            parent_id: root,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: None,
+            captured_type_args: None,
+        },
+    );
+    p.span(
+        root,
+        &mut SpanRecord::ThreadSpawned {
+            child: future,
+            parent: spawner,
+        },
+    );
+    // The spawner completes before the future's own records come.
+    p.span(
+        root,
+        &mut SpanRecord::FunctionSpanCompletionOk {
+            id: spawner,
+            parent_id: root,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            exited_at: ClockInstant::from_ticks(2),
+            await_time: AwaitDuration::ZERO,
+            captured_value: None,
+        },
+    );
+    p.flush_recording().unwrap();
+    let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
+    p.span(
+        future,
+        &mut SpanRecord::ThreadSpanAnnouncement {
+            id: future,
+            parent_id: Some(spawner),
+            spawn_call_path: path,
+            started_at: ClockInstant::from_ticks(3),
+            clock: Arc::clone(&clock),
+            name: Some(Arc::new("worker".into())),
+        },
+    );
+    p.span(
+        future,
+        &mut SpanRecord::ThreadSpanRunning {
+            at: ClockInstant::from_ticks(4),
+        },
+    );
+    p.flush_recording().unwrap();
+    p.span(
+        future,
+        &mut SpanRecord::ThreadSpanCompletion {
+            id: future,
+            parent_id: Some(spawner),
+            spawn_call_path: path,
+            started_at: ClockInstant::from_ticks(3),
+            completed_at: ClockInstant::from_ticks(9),
+            outcome: InvocationOutcome::Ok,
+            clock: Arc::clone(&clock),
+            name: Some(Arc::new("worker".into())),
+        },
+    );
+    p.flush_recording().unwrap();
+    let files = files.borrow();
+    // Running when the second file sealed: its slim start record.
+    assert_eq!(
+        events(&decode(&files[1])),
+        [Event::ThreadAnnouncement(proto::ThreadAnnouncement {})]
+    );
+    let last = decode(&files[2]);
+    // Its definition and its spawn path's, with the paths above it.
+    assert_eq!(
+        btel_core::recording::unresolved_definitions(&last),
+        Vec::<(&str, u64)>::new()
+    );
+    let [Event::ThreadCompletion(done)] = &events(&last)[..] else {
+        panic!("one thread completion");
+    };
+    assert_eq!(done.parent_id, Some(spawner.get()));
+    assert_eq!(done.spawn_call_path_id, path.get());
+    assert_eq!(done.started_at_ticks, 3);
+    assert_eq!(done.running_at_ticks, Some(4));
+    assert_eq!(done.clock_epoch_id, clock.metadata().epoch.get());
+    assert_eq!(done.name.as_deref(), Some("worker"));
+    assert_eq!(
+        done.lineage,
+        Some(proto::Lineage {
+            depth: 2,
+            truncated_ancestor_span_ids: vec![spawner.get(), root.get()],
+        })
+    );
+}
+
+#[test]
+fn a_request_keeps_the_configured_number_of_events_and_counts_the_rest() {
+    use btel_records::{
+        NetworkAnnouncement, NetworkCompletion, NetworkEventName, NetworkEventRecord,
+    };
+    use proto::span_event::Event;
+
+    let files = RefCell::new(Vec::new());
+    let (thread, _, path) = ids();
+    let mut p = RecordingPublisher::new(
+        btel_types::new_recording_id(),
+        RecordingConfig {
+            max_request_events: 2,
+            ..config()
+        },
+        |f| files.borrow_mut().push(f),
+    )
+    .unwrap();
+    // This test is about encoding: records of undefined paths are written.
+    p.builder.buffer.write_undefined = true;
+    let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
+    p.span(thread, &mut thread_record(thread, &clock, false));
+    let span = allocate_telemetry_id();
+    p.span(
+        thread,
+        &mut SpanRecord::NetworkSpanAnnouncement(Box::new(NetworkAnnouncement {
+            id: span,
+            parent_id: thread,
+            call_path: path,
+            started_at: ClockInstant::from_ticks(1),
+            method: "GET".into(),
+            url: "https://example.com".into(),
+            request: None,
+        })),
+    );
+    for at in 2..7 {
+        p.span(
+            thread,
+            &mut SpanRecord::NetworkEvent(Box::new(NetworkEventRecord {
+                span,
+                name: NetworkEventName::Data,
+                at: ClockInstant::from_ticks(at),
+                payload: None,
+            })),
+        );
+    }
+    p.span(
+        thread,
+        &mut SpanRecord::NetworkSpanCompletion(Box::new(NetworkCompletion {
+            span,
+            completed_at: ClockInstant::from_ticks(9),
+            outcome: InvocationOutcome::Ok,
+            error: None,
+        })),
+    );
+    p.flush_recording().unwrap();
+    let files = files.borrow();
+    let done = events(&decode(&files[0]))
+        .into_iter()
+        .find_map(|event| match event {
+            Event::NetworkCompletion(done) => Some(done),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        done.events.iter().map(|e| e.at_ticks).collect::<Vec<_>>(),
+        [2, 3]
+    );
+    assert_eq!(done.dropped_events, 3);
+}
+
+#[test]
+fn finished_threads_leave_nothing_in_the_recorder() {
+    let files = RefCell::new(Vec::new());
+    let (root, function, path) = ids();
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap();
+    // The root defines the path every future is spawned at.
+    metadata(&mut p, root, function, path);
+    // Forget a finished thread at the next seal.
+    p.builder.buffer.defs.grace = Some(std::time::Duration::ZERO);
+    p.builder.buffer.defs.grace_seals = Some(0);
+    let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
+    for _ in 0..1000 {
+        let future = allocate_telemetry_id();
+        let spawner = allocate_telemetry_id();
+        p.span(
+            root,
+            &mut SpanRecord::ThreadSpawned {
+                child: future,
+                parent: spawner,
+            },
+        );
+        for completed in [false, true] {
+            let mut record = thread_record(future, &clock, completed);
+            if let SpanRecord::ThreadSpanAnnouncement {
+                parent_id,
+                spawn_call_path,
+                ..
+            }
+            | SpanRecord::ThreadSpanCompletion {
+                parent_id,
+                spawn_call_path,
+                ..
+            } = &mut record
+            {
+                *parent_id = Some(spawner);
+                *spawn_call_path = path;
+            }
+            p.span(future, &mut record);
+        }
+        p.flush_recording().unwrap();
+    }
+    // Only the root and the path it defined are kept.
+    assert_eq!(p.builder.buffer.defs.kept(), (1, 1));
+    // Every file read alone names what it references.
+    for file in files.borrow().iter() {
+        assert_eq!(
+            btel_core::recording::unresolved_definitions(&decode(file)),
+            Vec::<(&str, u64)>::new()
+        );
+    }
+}
+
+#[test]
+fn a_file_sealed_long_after_its_clock_changed_carries_the_clocks_state() {
+    let files = RefCell::new(Vec::new());
+    let (thread, function, path) = ids();
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap();
+    // The epoch's state is observed once, when the thread starts.
+    metadata(&mut p, thread, function, path);
+    p.flush_recording().unwrap();
+    for _ in 0..3 {
+        p.span(
+            thread,
+            &mut SpanRecord::FunctionSpanCompletionOk {
+                id: allocate_telemetry_id(),
+                parent_id: thread,
+                call_path: path,
+                entered_at: ClockInstant::from_ticks(1),
+                exited_at: ClockInstant::from_ticks(2),
+                await_time: AwaitDuration::ZERO,
+                captured_value: None,
+            },
+        );
+        p.flush_recording().unwrap();
+    }
+    let files = files.borrow();
+    let last = decode(files.last().unwrap());
+    let epoch = last.definitions.as_ref().unwrap().clock_epochs[0].epoch_id;
+    assert!(
+        clock_states(&last).iter().any(|state| state.0 == epoch),
+        "the last file states the epoch it defines"
+    );
+    assert_eq!(
+        btel_core::recording::unresolved_definitions(&last),
+        Vec::<(&str, u64)>::new()
+    );
+}
+
+#[test]
+fn a_delta_whose_path_is_never_defined_is_dropped_and_counted() {
+    let (thread, function, defined) = ids();
+    let never = CallPathId::new_non_root(99).unwrap();
+    let files = RefCell::new(Vec::new());
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap();
+    metadata(&mut p, thread, function, defined);
+    p.aggregate(delta(never));
+    // It waits four seals for its definition, then the next drops it.
+    for _ in 0..=MAX_HOLDS {
+        p.aggregate(delta(defined));
+        p.flush_recording().unwrap();
+    }
+    let files = files.borrow();
+    let batches: Vec<proto::AggregateBatch> = files
+        .iter()
+        .map(|file| decode(file).aggregates.unwrap_or_default())
+        .collect();
+    let dropped: Vec<u64> = batches.iter().map(|b| b.dropped_invocations).collect();
+    assert_eq!(dropped, [0, 0, 0, 0, 2]);
+    assert!(
+        batches
+            .iter()
+            .flat_map(|b| &b.entries)
+            .all(|entry| entry.node >> 1 == u64::from(defined.get()))
+    );
+    for file in files.iter() {
+        assert_eq!(
+            btel_core::recording::unresolved_definitions(&decode(file)),
+            Vec::<(&str, u64)>::new()
+        );
+    }
+}
+
+#[test]
+fn the_last_file_drops_a_delta_whose_path_is_not_defined() {
+    let (_, _, path) = ids();
+    let never = CallPathId::new_non_root(99).unwrap();
+    let mut builder = RecordingBuilder::new(btel_types::new_recording_id(), config()).unwrap();
+    define_path(&mut builder, path);
+    builder.aggregate(delta(path));
+    builder.aggregate(delta(never));
+    let last = decode(&builder.end_recording().unwrap().unwrap());
+    assert!(last.end.is_some());
+    let batch = last.aggregates.clone().unwrap();
+    assert_eq!(batch.entries.len(), 1);
+    assert_eq!(batch.dropped_invocations, 2);
+    assert_eq!(
+        btel_core::recording::unresolved_definitions(&last),
+        Vec::<(&str, u64)>::new()
+    );
+}
+
+#[test]
+fn a_span_whose_path_is_not_defined_yet_waits_and_one_never_defined_is_counted() {
+    let files = RefCell::new(Vec::new());
+    let (thread, function, path) = ids();
+    let (late, never) = (
+        CallPathId::new_non_root(50).unwrap(),
+        CallPathId::new_non_root(99).unwrap(),
+    );
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap();
+    metadata(&mut p, thread, function, path);
+    let completion = |call_path| SpanRecord::FunctionSpanCompletionOk {
+        id: allocate_telemetry_id(),
+        parent_id: thread,
+        call_path,
+        entered_at: ClockInstant::from_ticks(1),
+        exited_at: ClockInstant::from_ticks(2),
+        await_time: AwaitDuration::ZERO,
+        captured_value: None,
+    };
+    // Both arrive before their paths' definitions.
+    p.span(thread, &mut completion(late));
+    p.span(thread, &mut completion(never));
+    p.flush_recording().unwrap();
+    // The late path's definition arrives: its span rides the next file.
+    p.span(
+        thread,
+        &mut SpanRecord::CallPathDefined {
+            call_path: late,
+            parent_call_path: path,
+            visible_caller: Some(function),
+            caller_pc: 3,
+            callee: function,
+            edge: btel_types::CallPathEdge::Synchronous,
+        },
+    );
+    for _ in 0..MAX_HOLDS {
+        p.aggregate(delta(path));
+        p.flush_recording().unwrap();
+    }
+    let files = files.borrow();
+    let decoded: Vec<_> = files.iter().map(decode).collect();
+    let completions = |file: &proto::RecordingFile| -> Vec<u64> {
+        events(file)
+            .into_iter()
+            .filter_map(|event| match event {
+                proto::span_event::Event::FunctionCompletion(done) => Some(done.node >> 1),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(completions(&decoded[0]), Vec::<u64>::new());
+    assert_eq!(completions(&decoded[1]), [u64::from(late.get())]);
+    // The span of the path never defined waits MAX_HOLDS seals, then the
+    // next file counts it instead of writing it.
+    let dropped: Vec<u64> = decoded
+        .iter()
+        .map(|file| file.spans.as_ref().map_or(0, |spans| spans.dropped_spans))
+        .collect();
+    assert_eq!(dropped, [0, 0, 0, 0, 1]);
+    for file in &decoded {
+        assert_eq!(
+            btel_core::recording::unresolved_definitions(file),
+            Vec::<(&str, u64)>::new()
+        );
+    }
+}
+
+#[test]
+fn a_file_writes_no_part_of_a_path_chain_or_thread_it_cannot_complete() {
+    let files = RefCell::new(Vec::new());
+    let (thread, function, path) = ids();
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap();
+    metadata(&mut p, thread, function, path);
+    // A path whose parent's definition has not arrived, and a thread that
+    // selects a context before its own definition arrives.
+    let (orphan, missing) = (
+        CallPathId::new_non_root(51).unwrap(),
+        CallPathId::new_non_root(50).unwrap(),
+    );
+    p.span(
+        thread,
+        &mut SpanRecord::CallPathDefined {
+            call_path: orphan,
+            parent_call_path: missing,
+            visible_caller: None,
+            caller_pc: 0,
+            callee: function,
+            edge: btel_types::CallPathEdge::Synchronous,
+        },
+    );
+    p.aggregate(delta(orphan));
+    let early = allocate_telemetry_id();
+    p.span(early, &mut SpanRecord::ContextCleared);
+    p.flush_recording().unwrap();
+    let file = decode(&files.borrow()[0]);
+    let definitions = file.definitions.clone().unwrap();
+    assert!(
+        definitions
+            .call_paths
+            .iter()
+            .all(|definition| definition.call_path_id != orphan.get())
+    );
+    assert!(
+        file.spans
+            .iter()
+            .flat_map(|spans| &spans.sections)
+            .all(|section| section.thread_id != early.get())
+    );
+    assert_eq!(
+        btel_core::recording::unresolved_definitions(&file),
+        Vec::<(&str, u64)>::new()
+    );
+}
+
+#[test]
+fn an_end_record_is_written_under_the_context_its_span_started_in() {
+    use proto::span_event::Event;
+    let files = RefCell::new(Vec::new());
+    let (thread, function, path) = ids();
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap();
+    metadata(&mut p, thread, function, path);
+    let (started, changed) = (snapshot_of(1), snapshot_of(2));
+    let started_id = crate::cas_id(&started);
+    p.span(
+        thread,
+        &mut SpanRecord::ContextSelected {
+            captured_context: Some(started),
+        },
+    );
+    let call = allocate_telemetry_id();
+    p.span(
+        thread,
+        &mut SpanRecord::FunctionSpanAnnouncement {
+            id: call,
+            parent_id: thread,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: None,
+            captured_type_args: None,
+        },
+    );
+    // The thread selects another context during the call and does not
+    // restore it before the call ends.
+    p.span(
+        thread,
+        &mut SpanRecord::ContextSelected {
+            captured_context: Some(changed),
+        },
+    );
+    p.span(
+        thread,
+        &mut SpanRecord::FunctionSpanCompletionOk {
+            id: call,
+            parent_id: thread,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            exited_at: ClockInstant::from_ticks(2),
+            await_time: AwaitDuration::ZERO,
+            captured_value: None,
+        },
+    );
+    p.flush_recording().unwrap();
+    let file = decode(&files.borrow()[0]);
+    let section = file
+        .spans
+        .unwrap()
+        .sections
+        .into_iter()
+        .find(|section| {
+            section
+                .events
+                .iter()
+                .any(|event| matches!(&event.event, Some(Event::FunctionCompletion(done)) if done.id == call.get()))
+        })
+        .unwrap();
+    assert_eq!(
+        section.context,
+        Some(proto::thread_section::Context::ContextCasId(started_id))
+    );
+}
+
+fn snapshot_of(value: i64) -> btel_snapshot::Snapshot {
+    let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
+    pool.try_acquire().unwrap().finish(
+        btel_snapshot::SnapshotValue::Int(value),
+        &mut btel_snapshot::Shaper::default(),
+    )
+}
+
+#[test]
+fn a_network_event_after_its_request_was_written_is_counted() {
+    use btel_records::{
+        NetworkAnnouncement, NetworkCompletion, NetworkEventName, NetworkEventRecord,
+    };
+    let files = RefCell::new(Vec::new());
+    let (thread, function, path) = ids();
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap();
+    metadata(&mut p, thread, function, path);
+    let span = allocate_telemetry_id();
+    p.span(
+        thread,
+        &mut SpanRecord::NetworkSpanAnnouncement(Box::new(NetworkAnnouncement {
+            id: span,
+            parent_id: thread,
+            call_path: path,
+            started_at: ClockInstant::from_ticks(1),
+            method: "GET".into(),
+            url: "https://example.com".into(),
+            request: None,
+        })),
+    );
+    p.span(
+        thread,
+        &mut SpanRecord::NetworkSpanCompletion(Box::new(NetworkCompletion {
+            span,
+            completed_at: ClockInstant::from_ticks(3),
+            outcome: InvocationOutcome::Ok,
+            error: None,
+        })),
+    );
+    // The file seals with the request parked: its end record is written.
+    p.flush_recording().unwrap();
+    // The program finishes reading it in the next file.
+    p.span(
+        thread,
+        &mut SpanRecord::NetworkEvent(Box::new(NetworkEventRecord {
+            span,
+            name: NetworkEventName::Await,
+            at: ClockInstant::from_ticks(4),
+            payload: None,
+        })),
+    );
+    p.aggregate(delta(path));
+    p.flush_recording().unwrap();
+    let files = files.borrow();
+    let dropped: Vec<u64> = files
+        .iter()
+        .map(|file| {
+            decode(file)
+                .spans
+                .map_or(0, |spans| spans.dropped_network_events)
+        })
+        .collect();
+    assert_eq!(dropped, [0, 1]);
 }

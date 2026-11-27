@@ -103,13 +103,13 @@ async fn shutdown_finalizes_telemetry_once_without_guessing_the_host_outcome() {
                 btel_recorder::proto::ProcessStatus::Unknown as i32
             );
             assert!(end.at_unix_ns > 0);
-            // The header names the process's platform, the newest addition.
+            // The header names the process's platform; every file is minor 17.
             let header = terminal.header.as_ref().unwrap();
             assert!(header.program_id.is_some());
             assert!(header.os.is_some() && header.arch.is_some());
             assert_eq!(
                 header.format_minor,
-                btel_core::recording::minor::PROCESS_PLATFORM
+                btel_core::recording::minor::SELF_CONTAINED
             );
         }
     }

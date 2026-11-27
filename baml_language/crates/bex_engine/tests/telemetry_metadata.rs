@@ -101,7 +101,7 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
     let mut inputs = Vec::new();
     for file in &read.files {
         let header = file.header.as_ref().unwrap();
-        let mut expected_minor = btel_core::recording::minor::BASE;
+        let mut expected_minor = btel_core::recording::minor::SELF_CONTAINED;
         if header.process_id.is_some() {
             expected_minor = expected_minor.max(btel_core::recording::minor::PROCESS_CONTEXT);
         }
@@ -135,8 +135,10 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
         }
         for section in &file.spans.as_ref().unwrap().sections {
             for event in &section.events {
-                if let Some(proto::span_event::Event::FunctionAnnouncement(a)) = &event.event {
-                    inputs.push((a.call_path_id, a.inputs_cas_id.unwrap()));
+                if let Some(proto::span_event::Event::FunctionCompletion(done)) = &event.event
+                    && let Some(captured) = done.inputs_cas_id
+                {
+                    inputs.push((u32::try_from(done.node >> 1).unwrap(), captured));
                 }
             }
         }

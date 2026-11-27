@@ -266,12 +266,11 @@ eligible to be offered again; reaching the history limit evicts old entries.
 Placement thresholds use each blob's exact encoded length. A recording body
 has a hard limit; a CAS body is as long as its blobs.
 
-Unacknowledged recording metadata is replayed in later files, without replaying
-spans or aggregates. Its journal is bounded; prolonged outages can evict old
-metadata and leave references unresolved. `telemetry_metadata_replay_evictions`
-reports these evictions separately from confirmed payload loss, since an
-in-flight copy may still succeed. This is best-effort recovery, not a guarantee
-of complete history after arbitrary outages.
+Nothing of a lost recording file is replayed: every file defines the
+functions, call paths, threads and clock epochs its own records reference
+(recording minor 17), so the files that arrive read alone. A function's full
+definition is written once per recording; if its file is lost, later files
+still name the function by its slim definition.
 
 Snapshot accounting conservatively charges arena capacities and shared backing.
 It excludes the preexisting shared pool and allocator metadata. Bigint values

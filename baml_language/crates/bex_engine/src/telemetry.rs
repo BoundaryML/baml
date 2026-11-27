@@ -1158,21 +1158,6 @@ impl BexEngine {
         }
     }
 
-    /// Metadata segments evicted from bounded cloud replay storage. An eviction
-    /// is not confirmed upload loss: an in-flight copy may still succeed.
-    pub fn telemetry_metadata_replay_evictions(&self) -> u64 {
-        match self
-            .telemetry
-            .as_ref()
-            .and_then(|state| state.delivery.as_ref())
-        {
-            Some(RecordingDelivery::Cloud { delivery, .. }) => {
-                delivery.handle().metadata_replay_evictions()
-            }
-            _ => 0,
-        }
-    }
-
     /// Everything the `telemetry_diagnostics` feature counts, as JSON: the
     /// producers' pools and cold paths, and cloud delivery's progress and
     /// losses. `None` when telemetry is off. Readable at any time; shutdown
@@ -1267,7 +1252,6 @@ impl BexEngine {
                     "kind": "cloud",
                     "loss_count": handle.loss_count(),
                     "recording_acked_through": handle.recording_acked_through(),
-                    "metadata_replay_evictions": handle.metadata_replay_evictions(),
                     "disabled": handle.is_disabled(),
                     "pending_plans": pending_plans,
                     "pending_captures": pending_captures,

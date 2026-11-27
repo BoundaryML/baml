@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use btel_types::{FunctionId, FunctionMetadata, FunctionMetadataTable};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 
 use crate::proto::{self, function_definition::Resolution};
 
@@ -11,8 +11,9 @@ use crate::proto::{self, function_definition::Resolution};
 pub(crate) struct FunctionDefinitions {
     table: Option<Arc<FunctionMetadataTable>>,
     host: FxHashMap<FunctionId, FunctionMetadata>,
-    // Functions whose metadata this recording already published.
-    published: FxHashSet<FunctionId>,
+    // Functions whose full metadata this recording already published, with
+    // the slim definition every later file carries.
+    published: FxHashMap<FunctionId, proto::FunctionDefinition>,
 }
 
 impl FunctionDefinitions {
@@ -46,13 +47,14 @@ impl FunctionDefinitions {
         (entry.file_id == own_file).then_some(entry.line)
     }
 
-    /// The definition to publish for a newly referenced function, if any.
-    /// Known metadata is published once per recording: later files resolve
-    /// the reference through the earlier definition. Unknown functions keep
-    /// the per-reference `MetadataUnavailable` observation.
-    pub(crate) fn resolve(&mut self, function: FunctionId) -> Option<Resolution> {
-        if self.published.contains(&function) {
-            return None;
+    /// The definition of a function a file references, and whether it is
+    /// the full one. Known metadata is published in full once per recording,
+    /// in the first file that references it; every later file carries its
+    /// slim definition. An unknown function is `MetadataUnavailable` in each
+    /// file that references it.
+    pub(crate) fn definition(&mut self, function: FunctionId) -> (proto::FunctionDefinition, bool) {
+        if let Some(slim) = self.published.get(&function) {
+            return (slim.clone(), false);
         }
         match self
             .host
@@ -60,10 +62,21 @@ impl FunctionDefinitions {
             .or_else(|| self.table.as_ref().and_then(|table| table.get(function)))
         {
             Some(metadata) => {
-                self.published.insert(function);
-                Some(Resolution::Metadata(convert(metadata)))
+                let full = proto::FunctionDefinition {
+                    function_id: function.get(),
+                    resolution: Some(Resolution::Metadata(convert(metadata))),
+                };
+                self.published
+                    .insert(function, btel_core::recording::slim_function(&full));
+                (full, true)
             }
-            None => Some(Resolution::Unavailable(proto::MetadataUnavailable {})),
+            None => (
+                proto::FunctionDefinition {
+                    function_id: function.get(),
+                    resolution: Some(Resolution::Unavailable(proto::MetadataUnavailable {})),
+                },
+                false,
+            ),
         }
     }
 }

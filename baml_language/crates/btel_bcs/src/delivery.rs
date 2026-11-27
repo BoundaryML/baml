@@ -240,7 +240,6 @@ struct State {
     loss_count: u64,
     /// Losses that may have dropped a definition group a capture carried.
     carried_resets: u64,
-    metadata_replay_evictions: u64,
     progress: DeliveryProgress,
     recording_bytes: usize,
     cas: Budget,
@@ -730,19 +729,6 @@ impl BcsDeliveryHandle {
             .unwrap()
             .progress
             .recording_acked_through
-    }
-
-    /// Saturating count of definition segments evicted from bounded replay retention.
-    pub fn metadata_replay_evictions(&self) -> u64 {
-        self.shared.state.lock().unwrap().metadata_replay_evictions
-    }
-
-    pub(crate) fn record_metadata_replay_evictions(&self, count: u64) {
-        if count == 0 {
-            return;
-        }
-        let mut state = self.shared.state.lock().unwrap();
-        state.metadata_replay_evictions = state.metadata_replay_evictions.saturating_add(count);
     }
 
     pub(crate) fn record_payload_loss(&self, error: DeliveryError, reset_cas: bool) {
@@ -2326,7 +2312,7 @@ mod tests {
     }
 
     #[test]
-    fn replay_evictions_and_payload_losses_are_separate_bounded_counters() {
+    fn payload_losses_are_a_bounded_counter() {
         let delivery = BcsDelivery::new(
             DeliveryConfig::new("https://localhost".parse().unwrap()),
             |_| panic!("ordinary loss must not disable delivery"),
@@ -2336,13 +2322,8 @@ mod tests {
         {
             let mut state = handle.shared.state.lock().unwrap();
             state.loss_count = u64::MAX - 1;
-            state.metadata_replay_evictions = u64::MAX - 1;
             state.progress.recording_acked_through = 7;
         }
-        handle.record_metadata_replay_evictions(0);
-        assert_eq!(handle.metadata_replay_evictions(), u64::MAX - 1);
-        handle.record_metadata_replay_evictions(2);
-        assert_eq!(handle.metadata_replay_evictions(), u64::MAX);
         assert_eq!(handle.loss_count(), u64::MAX - 1);
         assert_eq!(handle.last_error(), None);
         handle.record_payload_loss(DeliveryError::Encoding, true);

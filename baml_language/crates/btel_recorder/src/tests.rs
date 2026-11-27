@@ -27,7 +27,10 @@ struct ProtobufPublisher<F> {
 impl<F: FnMut(ConvertedBatch)> ProtobufPublisher<F> {
     fn new(receive: F) -> Self {
         Self {
-            buffer: ConversionBuffer::default(),
+            buffer: ConversionBuffer {
+                write_undefined: true,
+                ..ConversionBuffer::default()
+            },
             receive,
         }
     }
@@ -46,8 +49,8 @@ impl<F: FnMut(ConvertedBatch)> Publisher<Snapshot, Snapshot> for ProtobufPublish
         if self.buffer.is_empty() {
             return;
         }
-        let b = self.buffer.take();
-        let bytes = self.buffer.spans.finish();
+        let b = self.buffer.take(true);
+        let bytes = self.buffer.spans.finish(0, 0);
         let spans = proto::RecordingFile::decode(bytes.as_slice())
             .unwrap()
             .spans
@@ -332,7 +335,8 @@ fn completion_variants_roundtrip_without_losing_wire_semantics() {
         let flags = CompletionFlags::from_wire(completion.completion_flags, is_late).unwrap();
         assert_eq!(flags.outcome(), crate::flags::outcome(outcome));
         assert_eq!(completion.value_cas_id.is_some(), captured);
-        assert_eq!(flags.requires_announcement(), dependency);
+        // A completion carries what its announcement did: it never depends on it.
+        assert!(!flags.requires_announcement(), "{dependency}");
         assert_eq!(is_late, late);
         assert_eq!(
             completion.node,
@@ -517,9 +521,13 @@ fn converted_output_outlives_recycled_chunks_and_preserves_selector_context() {
         batch.definitions.clock_epochs[0].epoch_id,
         clock.metadata().epoch.get()
     );
-    assert_eq!(batch.definitions.functions[0].function_id, function.get());
+    // A function without metadata is named by its placeholder in each file.
+    assert_eq!(
+        batch.definitions.slim_functions[0].function_id,
+        function.get()
+    );
     assert!(matches!(
-        batch.definitions.functions[0].resolution,
+        batch.definitions.slim_functions[0].resolution,
         Some(proto::function_definition::Resolution::Unavailable(_))
     ));
     assert_eq!(batch.definitions.call_paths[0].caller_pc, u32::MAX);
@@ -721,7 +729,10 @@ fn overflow_spills_whole_delta_without_partial_updates_or_mid_callback_flush() {
 #[test]
 fn outcomes_are_present_at_zero_and_absence_stays_distinguishable() {
     use btel_types::CallPathNodeId;
-    let mut buffer = ConversionBuffer::default();
+    let mut buffer = ConversionBuffer {
+        write_undefined: true,
+        ..ConversionBuffer::default()
+    };
     let node = CallPathNodeId::new(CallPathId::new_non_root(3).unwrap(), false);
     buffer.aggregate(AggregateDelta {
         node,
@@ -729,7 +740,7 @@ fn outcomes_are_present_at_zero_and_absence_stays_distinguishable() {
         ..AggregateDelta::default()
     });
     let pending = buffer.pending_encoded_bytes;
-    let batch = buffer.take().aggregates;
+    let batch = buffer.take(true).aggregates;
     // The cached size includes the empty outcomes message exactly.
     assert_eq!(pending, batch.encoded_len());
     let [entry] = batch.entries.as_slice() else {
@@ -786,12 +797,15 @@ fn outcome_merge_growth_and_spills_keep_exact_encoded_size() {
     // After every prefix, the cached size equals the sealed batch exactly.
     let mut entries = Vec::new();
     for prefix in 1..=deltas.len() {
-        let mut buffer = ConversionBuffer::default();
+        let mut buffer = ConversionBuffer {
+            write_undefined: true,
+            ..ConversionBuffer::default()
+        };
         for delta in &deltas[..prefix] {
             buffer.aggregate(*delta);
         }
         let pending = buffer.pending_encoded_bytes;
-        let batch = buffer.take().aggregates;
+        let batch = buffer.take(true).aggregates;
         assert_eq!(pending, batch.encoded_len(), "prefix {prefix}");
         entries = batch.entries;
     }

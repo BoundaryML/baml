@@ -3,7 +3,7 @@
 //! both. A count no call reported is null, not zero. How usage is read and
 //! summed is `btel-core`'s (`btel_core::reader::usage`), as it is for BCS.
 
-pub(crate) use btel_core::reader::usage::{ModelUsage, from_wire, merge};
+pub(crate) use btel_core::reader::usage::{ModelUsage, from_wire};
 
 pub(crate) fn parse(text: &str) -> serde_json::Result<Vec<ModelUsage>> {
     serde_json::from_str(text)

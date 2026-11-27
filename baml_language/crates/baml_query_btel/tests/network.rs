@@ -1,6 +1,8 @@
 //! Network spans on hand-built recording files: their rows, their events,
-//! payloads read lazily, and evidence that arrives out of order or in
-//! conflict. One tick is one nanosecond, from 2026-09-21T14:13:20Z.
+//! payloads read lazily, and evidence in conflict. A request's completion is
+//! the whole span (format minor 16); a local recording's slim start record
+//! shows one still running. One tick is one nanosecond, from
+//! 2026-09-21T14:13:20Z.
 use std::path::{Path, PathBuf};
 
 use baml_query_btel::{Index, IndexOptions, QueryRequest, QueryResult, Status};
@@ -24,16 +26,11 @@ struct Recording {
     project: PathBuf,
     dir: PathBuf,
     id: [u8; 16],
-    /// 7 records network spans; 3 is a recording from before them.
-    minor: u32,
 }
 
 impl Recording {
     fn new(project: &Path) -> Self {
-        Self::with(project, [3; 16], 7)
-    }
-
-    fn with(project: &Path, id: [u8; 16], minor: u32) -> Self {
+        let id = [3; 16];
         let dir = project
             .join(".baml/btel/recordings")
             .join(btel_core::reader::discovery::hex(&id));
@@ -42,14 +39,13 @@ impl Recording {
             project: project.to_owned(),
             dir,
             id,
-            minor,
         }
     }
 
     fn write(&self, sequence: u64, mut file: proto::RecordingFile) {
         file.header = Some(proto::RecordingHeader {
             format_major: 2,
-            format_minor: self.minor,
+            format_minor: btel_core::recording::minor::SELF_CONTAINED,
             recording_id: self.id.to_vec(),
             process_id: Some(vec![9; 16]),
             ..Default::default()
@@ -183,6 +179,7 @@ fn definitions() -> proto::Definitions {
             }),
             ..Default::default()
         }],
+        slim_functions: Vec::new(),
     }
 }
 
@@ -208,60 +205,96 @@ fn section(thread: u64, events: Vec<Event>) -> proto::ThreadSection {
 }
 
 fn spans(sections: Vec<proto::ThreadSection>) -> proto::SpanBatch {
-    proto::SpanBatch { sections }
+    proto::SpanBatch {
+        sections,
+        dropped_spans: 0,
+        dropped_network_events: 0,
+    }
 }
 
-fn announce(
-    id: u64,
-    method: &str,
-    url: &str,
-    started: u64,
-    request: Option<proto::CasId>,
-) -> Event {
-    Event::NetworkAnnouncement(proto::NetworkAnnouncement {
-        id,
+/// Request `id`, made on the root thread by `CALL` at path 2: its start,
+/// which its completion carries; set its request and events on it.
+fn request(id: u64, method: &str, url: &str, started: u64) -> proto::NetworkCompletion {
+    proto::NetworkCompletion {
+        span_id: id,
+        thread_id: ROOT,
         parent_id: CALL,
         call_path_id: 2,
         started_at_ticks: started,
         method: method.into(),
         url: url.into(),
-        request_cas_id: request,
+        ..Default::default()
+    }
+}
+
+/// A local recording's slim start record of `request`, written in the
+/// requesting thread's section.
+fn announce(request: &proto::NetworkCompletion) -> Event {
+    Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+        id: request.span_id,
+        parent_id: request.parent_id,
+        call_path_id: request.call_path_id,
+        started_at_ticks: request.started_at_ticks,
+        method: request.method.clone(),
+        url: request.url.clone(),
+        request_cas_id: None,
     })
 }
 
-fn event(span: u64, name: &str, at: u64, payload: Option<proto::CasId>) -> Event {
-    Event::NetworkEvent(proto::NetworkEvent {
-        span_id: span,
+/// One event a completion carries.
+fn event(name: &str, at: u64, payload: Option<proto::CasId>) -> proto::NetworkEvent {
+    proto::NetworkEvent {
+        span_id: 0,
         name: name.into(),
         at_ticks: at,
         payload_cas_id: payload,
-    })
+    }
 }
 
+/// `request` completed: the whole span.
 fn complete(
-    span: u64,
+    request: &proto::NetworkCompletion,
     at: u64,
     outcome: proto::InvocationOutcome,
     error: Option<proto::CasId>,
 ) -> Event {
     Event::NetworkCompletion(proto::NetworkCompletion {
-        span_id: span,
         completed_at_ticks: at,
         outcome: outcome as i32,
-        panicked: false,
         error_cas_id: error,
+        ..request.clone()
     })
+}
+
+/// A request with `events`, announced and completed at the last one.
+fn whole(mut request: proto::NetworkCompletion, events: Vec<proto::NetworkEvent>) -> Vec<Event> {
+    let end = events
+        .last()
+        .map_or(request.started_at_ticks, |e| e.at_ticks);
+    request.events = events;
+    vec![
+        announce(&request),
+        complete(&request, end, proto::InvocationOutcome::Ok, None),
+    ]
 }
 
 fn call() -> Event {
     Event::FunctionAnnouncement(proto::FunctionAnnouncement {
-        manual: false,
         id: CALL,
         parent_id: ROOT,
         call_path_id: 1,
         entered_at_ticks: 5_000,
-        inputs_cas_id: None,
-        type_args_cas_id: None,
+        ..Default::default()
+    })
+}
+
+fn thread_done(thread: u64, at: u64) -> Event {
+    Event::ThreadCompletion(proto::ThreadCompletion {
+        completed_at_ticks: at,
+        outcome: proto::InvocationOutcome::Ok as i32,
+        parent_id: (thread != ROOT).then_some(ROOT),
+        clock_epoch_id: EPOCH,
+        ..Default::default()
     })
 }
 
@@ -298,6 +331,14 @@ fn network_spans_are_spans_with_their_request_and_events() {
     let connection = recording.cas(&json!({"status": 200, "headers": {"request-id": "r1"}}));
     let body = recording.cas(&json!("{\"ok\":true}"));
     let error = recording.cas(&json!({"error": "connection refused"}));
+    let mut post = self::request(REQUEST, "POST", URL, 10_000);
+    post.request_cas_id = Some(request);
+    post.events = vec![
+        event("connection", 20_000, Some(connection)),
+        event("data", 30_000, Some(body)),
+        event("await", 31_000, None),
+    ];
+    let health = self::request(OTHER, "GET", "https://example.com/health", 40_000);
     recording.write(
         1,
         proto::RecordingFile {
@@ -314,30 +355,22 @@ fn network_spans_are_spans_with_their_request_and_events() {
                     })
                     .to_vec(),
                 sysop_times: vec![],
+                ..proto::AggregateBatch::default()
             }),
             spans: Some(spans(vec![section(
                 ROOT,
                 vec![
                     call(),
-                    announce(REQUEST, "POST", URL, 10_000, Some(request)),
-                    event(REQUEST, "connection", 20_000, Some(connection)),
-                    event(REQUEST, "data", 30_000, Some(body)),
-                    event(REQUEST, "await", 31_000, None),
-                    complete(REQUEST, 31_000, proto::InvocationOutcome::Ok, None),
-                    announce(OTHER, "GET", "https://example.com/health", 40_000, None),
+                    announce(&post),
+                    complete(&post, 31_000, proto::InvocationOutcome::Ok, None),
+                    announce(&health),
                     complete(
-                        OTHER,
+                        &health,
                         45_000,
                         proto::InvocationOutcome::Errored,
                         Some(error),
                     ),
-                    Event::ThreadCompletion(proto::ThreadCompletion {
-                        completed_at_ticks: 60_000,
-                        outcome: proto::InvocationOutcome::Ok as i32,
-                        panicked: false,
-                        usage: Vec::new(),
-                        error_cas_id: None,
-                    }),
+                    thread_done(ROOT, 60_000),
                 ],
             )])),
             // The recording is folded: only the paths spans read remain.
@@ -475,16 +508,20 @@ fn an_event_payload_loads_only_its_own_blob() {
             clock_states: Some(valid()),
             spans: Some(spans(vec![section(
                 ROOT,
-                vec![
-                    call(),
-                    announce(REQUEST, "POST", URL, 10_000, None),
-                    event(REQUEST, "connection", 20_000, Some(connection)),
-                    event(REQUEST, "data", 21_000, Some(first)),
-                    event(REQUEST, "data", 22_000, Some(second)),
-                    event(REQUEST, "end", 23_000, None),
-                    event(REQUEST, "await", 23_000, None),
-                    complete(REQUEST, 23_000, proto::InvocationOutcome::Ok, None),
-                ],
+                [
+                    vec![call()],
+                    whole(
+                        request(REQUEST, "POST", URL, 10_000),
+                        vec![
+                            event("connection", 20_000, Some(connection)),
+                            event("data", 21_000, Some(first)),
+                            event("data", 22_000, Some(second)),
+                            event("end", 23_000, None),
+                            event("await", 23_000, None),
+                        ],
+                    ),
+                ]
+                .concat(),
             )])),
             ..Default::default()
         },
@@ -592,13 +629,17 @@ fn events_with_the_same_payload_each_show_it() {
             clock_states: Some(valid()),
             spans: Some(spans(vec![section(
                 ROOT,
-                vec![
-                    call(),
-                    announce(REQUEST, "POST", URL, 10_000, None),
-                    event(REQUEST, "data", 21_000, Some(ping)),
-                    event(REQUEST, "data", 22_000, Some(again)),
-                    complete(REQUEST, 23_000, proto::InvocationOutcome::Ok, None),
-                ],
+                [
+                    vec![call()],
+                    whole(
+                        request(REQUEST, "POST", URL, 10_000),
+                        vec![
+                            event("data", 21_000, Some(ping)),
+                            event("data", 22_000, Some(again)),
+                        ],
+                    ),
+                ]
+                .concat(),
             )])),
             ..Default::default()
         },
@@ -644,6 +685,13 @@ fn a_body_stored_as_a_blob_of_its_own_is_read_through_its_payload() {
         std::fs::metadata(path).unwrap().len()
     };
     assert!(blobs(&request) < 1024 && blobs(&data) < 1024);
+    let mut post = self::request(
+        REQUEST,
+        "POST",
+        "https://api.anthropic.com/v1/messages",
+        10_000,
+    );
+    post.request_cas_id = Some(request);
     recording.write(
         1,
         proto::RecordingFile {
@@ -651,18 +699,11 @@ fn a_body_stored_as_a_blob_of_its_own_is_read_through_its_payload() {
             clock_states: Some(valid()),
             spans: Some(spans(vec![section(
                 ROOT,
-                vec![
-                    call(),
-                    announce(
-                        REQUEST,
-                        "POST",
-                        "https://api.anthropic.com/v1/messages",
-                        10_000,
-                        Some(request),
-                    ),
-                    event(REQUEST, "data", 21_000, Some(data)),
-                    complete(REQUEST, 23_000, proto::InvocationOutcome::Ok, None),
-                ],
+                [
+                    vec![call()],
+                    whole(post, vec![event("data", 21_000, Some(data))]),
+                ]
+                .concat(),
             )])),
             ..Default::default()
         },
@@ -705,11 +746,10 @@ fn two_event_lists_are_compared_each_by_its_own_content() {
     };
     let (first, second, same) = (payload("a"), payload("b"), payload("a"));
     let request = |id, payload| {
-        vec![
-            announce(id, "POST", URL, 10_000, None),
-            event(id, "data", 21_000, Some(payload)),
-            complete(id, 23_000, proto::InvocationOutcome::Ok, None),
-        ]
+        whole(
+            request(id, "POST", URL, 10_000),
+            vec![event("data", 21_000, Some(payload))],
+        )
     };
     recording.write(
         1,
@@ -751,55 +791,55 @@ fn two_event_lists_are_compared_each_by_its_own_content() {
 }
 
 #[test]
-fn an_unfinished_request_shows_its_events_so_far() {
+fn an_unfinished_request_shows_from_its_start_record() {
     let project = tempfile::tempdir().unwrap();
     let recording = Recording::new(project.path());
-    let connection = recording.cas(&json!({"status": 200, "headers": {}}));
+    let mut post = request(REQUEST, "POST", URL, 10_000);
     recording.write(
         1,
         proto::RecordingFile {
             definitions: Some(definitions()),
             clock_states: Some(valid()),
-            spans: Some(spans(vec![section(
-                ROOT,
-                vec![
-                    call(),
-                    announce(REQUEST, "POST", URL, 10_000, None),
-                    event(REQUEST, "connection", 20_000, Some(connection)),
-                ],
-            )])),
+            spans: Some(spans(vec![section(ROOT, vec![call(), announce(&post)])])),
             ..Default::default()
         },
     );
     let mut index = index(project.path());
-    let announced =
-        "SELECT span_name, start_time, is_complete, network_event_values[-1]['event_name'],
-        network_event_values[0]['payload']['status']
+    let announced = "SELECT span_name, start_time, is_complete, baml_value_state(input_args),
+        network_event_values[-1]['event_name'], network_event_values[0]['payload']['status']
       FROM span_announcements WHERE span_type = 'network_span'";
+    // Its request and events arrive with its completion.
     assert_eq!(
         rows(&mut index, announced),
         vec![vec![
             json!(format!("POST {URL}")),
             at(10_000),
             json!(0),
-            json!("connection"),
-            json!(200)
+            json!("capture_pending"),
+            Json::Null,
+            Json::Null
         ]]
     );
     let completed = "SELECT COUNT(*) FROM spans WHERE span_type = 'network_span'";
     assert_eq!(rows(&mut index, completed), vec![vec![json!(0)]]);
 
-    // The rest arrives in a later file, applied row by row.
+    // The completion arrives in a later file, applied row by row.
+    post.request_cas_id = Some(recording.cas(&json!({"request": {"method": "POST"}})));
+    post.events = vec![
+        event(
+            "connection",
+            20_000,
+            Some(recording.cas(&json!({"status": 200, "headers": {}}))),
+        ),
+        event("data", 30_000, Some(recording.cas(&json!("done")))),
+        event("await", 31_000, None),
+    ];
     recording.write(
         2,
         proto::RecordingFile {
             spans: Some(spans(vec![section(
                 ROOT,
-                vec![
-                    event(REQUEST, "data", 30_000, Some(recording.cas(&json!("done")))),
-                    event(REQUEST, "await", 31_000, None),
-                    complete(REQUEST, 31_000, proto::InvocationOutcome::Ok, None),
-                ],
+                vec![complete(&post, 31_000, proto::InvocationOutcome::Ok, None)],
             )])),
             ..Default::default()
         },
@@ -810,6 +850,7 @@ fn an_unfinished_request_shows_its_events_so_far() {
             json!(format!("POST {URL}")),
             at(10_000),
             json!(1),
+            json!("present"),
             json!("await"),
             json!(200)
         ]]
@@ -817,43 +858,47 @@ fn an_unfinished_request_shows_its_events_so_far() {
     assert_eq!(rows(&mut index, completed), vec![vec![json!(1)]]);
 }
 
-/// A network span has the context of the frame that sent its request: the
-/// context its announcement was recorded in. Its events and its completion,
-/// which can be read under another context, do not change it. Both ingest
-/// paths agree.
+/// A network span has the context of the frame that sent its request: its
+/// start record's, and its completion's, which the runtime writes under it.
+/// A start record wins over a completion read under another context. Both
+/// ingest paths agree.
 #[test]
 fn network_spans_have_the_context_they_were_sent_in() {
+    const THIRD: u64 = 102;
     let project = tempfile::tempdir().unwrap();
     let recording = Recording::new(project.path());
     let sent = recording.cas(&json!({"distinct_id": "user-7", "metadata": {"phase": "send"}}));
     let read = recording.cas(&json!({"distinct_id": "other", "metadata": {"phase": "read"}}));
-    let mut announced = section(
-        ROOT,
-        vec![call(), announce(REQUEST, "POST", URL, 10_000, None)],
-    );
+    let alone = recording.cas(&json!({"distinct_id": "user-8", "metadata": {"phase": "alone"}}));
+    let post = request(REQUEST, "POST", URL, 10_000);
+    let mut announced = section(ROOT, vec![call(), announce(&post)]);
     announced.context = Some(proto::thread_section::Context::ContextCasId(sent));
     let mut finished = section(
-        CHILD,
-        vec![
-            event(REQUEST, "await", 20_000, None),
-            complete(REQUEST, 20_000, proto::InvocationOutcome::Ok, None),
-        ],
+        ROOT,
+        vec![complete(&post, 20_000, proto::InvocationOutcome::Ok, None)],
     );
     finished.context = Some(proto::thread_section::Context::ContextCasId(read));
+    // Recorded only by its completion: the completion's context.
+    let third = request(THIRD, "GET", URL, 25_000);
+    let mut completed = section(
+        ROOT,
+        vec![complete(&third, 26_000, proto::InvocationOutcome::Ok, None)],
+    );
+    completed.context = Some(proto::thread_section::Context::ContextCasId(alone));
     // No context recorded with this one: unavailable, not empty.
     let unknown = section(
         ROOT,
-        vec![
-            announce(OTHER, "GET", URL, 30_000, None),
-            complete(OTHER, 31_000, proto::InvocationOutcome::Ok, None),
-        ],
+        whole(
+            request(OTHER, "GET", URL, 30_000),
+            vec![event("await", 31_000, None)],
+        ),
     );
     recording.write(
         1,
         proto::RecordingFile {
             definitions: Some(definitions()),
             clock_states: Some(valid()),
-            spans: Some(spans(vec![announced, finished, unknown])),
+            spans: Some(spans(vec![announced, finished, completed, unknown])),
             ..Default::default()
         },
     );
@@ -862,6 +907,12 @@ fn network_spans_have_the_context_they_were_sent_in() {
             recording.span(REQUEST),
             json!("user-7"),
             json!("send"),
+            json!("json"),
+        ],
+        vec![
+            recording.span(THIRD),
+            json!("user-8"),
+            json!("alone"),
             json!("json"),
         ],
         vec![
@@ -898,110 +949,75 @@ fn network_spans_have_the_context_they_were_sent_in() {
     }
 }
 
+/// A completion is the whole request: its start, request and events, in the
+/// order they happened, even with no start record and written in another
+/// section than the requesting thread's. A start record after it agrees.
 #[test]
-fn events_before_their_announcement_wait_for_it_and_keep_time_order() {
+fn a_completion_alone_is_the_whole_request() {
     let project = tempfile::tempdir().unwrap();
     let recording = Recording::new(project.path());
-    let request = recording.cas(&json!({"request": {"method": "GET", "url": URL}}));
-    // Another thread's section reads the stream; its events come first, and
-    // the connection is recorded after the data it preceded.
+    let mut get = request(REQUEST, "GET", URL, 10_000);
+    get.request_cas_id = Some(recording.cas(&json!({"request": {"method": "GET", "url": URL}})));
+    get.events = vec![
+        event("connection", 20_000, None),
+        event("data", 30_000, None),
+        // Same time as the data: the completion's order decides.
+        event("end", 30_000, None),
+        event("await", 31_000, None),
+    ];
     recording.write(
         1,
         proto::RecordingFile {
             definitions: Some(definitions()),
             clock_states: Some(valid()),
-            spans: Some(spans(vec![
-                section(CHILD, vec![event(REQUEST, "data", 30_000, None)]),
-                section(ROOT, vec![event(REQUEST, "connection", 20_000, None)]),
-            ])),
+            spans: Some(spans(vec![section(
+                CHILD,
+                vec![complete(&get, 31_000, proto::InvocationOutcome::Ok, None)],
+            )])),
             ..Default::default()
         },
     );
     let mut index = index(project.path());
-    let network = "SELECT COUNT(*) FROM span_announcements WHERE span_type = 'network_span'";
-    assert_eq!(
-        rows(&mut index, network),
-        vec![vec![json!(0)]],
-        "events alone say nothing about the span"
-    );
+    let query = "SELECT span_name, future_id, parent_span_id, start_time, duration,
+           input_args['request']['method'], network_event_values
+         FROM spans WHERE span_type = 'network_span'";
+    let expected = vec![vec![
+        json!(format!("GET {URL}")),
+        recording.span(ROOT),
+        recording.span(CALL),
+        at(10_000),
+        json!(21_000),
+        json!("GET"),
+        json!([
+            {"event_name": "connection", "payload": null, "timestamp": at(20_000)},
+            {"event_name": "data", "payload": null, "timestamp": at(30_000)},
+            {"event_name": "end", "payload": null, "timestamp": at(30_000)},
+            {"event_name": "await", "payload": null, "timestamp": at(31_000)},
+        ]),
+    ]];
+    assert_eq!(rows(&mut index, query), expected);
 
+    // Its start record, read later, is the same start: nothing changes.
     recording.write(
         2,
         proto::RecordingFile {
-            spans: Some(spans(vec![section(
-                CHILD,
-                vec![complete(
-                    REQUEST,
-                    31_000,
-                    proto::InvocationOutcome::Ok,
-                    None,
-                )],
-            )])),
+            spans: Some(spans(vec![section(ROOT, vec![announce(&get)])])),
             ..Default::default()
         },
     );
-    // Completed but not announced: the request is still due, and without
-    // the announcing thread there is no clock.
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT span_name, future_id, status, end_time, baml_value_state(input_args),
-               network_event_values[0]['event_name'], network_event_values[0]['timestamp']
-             FROM spans WHERE span_type = 'network_span'"
-        ),
-        vec![vec![
-            Json::Null,
-            Json::Null,
-            json!("return"),
-            Json::Null,
-            json!("capture_pending"),
-            json!("connection"),
-            Json::Null,
-        ]]
-    );
-
-    recording.write(
-        3,
-        proto::RecordingFile {
-            spans: Some(spans(vec![section(
-                ROOT,
-                vec![
-                    announce(REQUEST, "GET", URL, 10_000, Some(request)),
-                    // Same time as the data: recording order decides.
-                    event(REQUEST, "end", 30_000, None),
-                    event(REQUEST, "await", 31_000, None),
-                ],
-            )])),
-            ..Default::default()
-        },
-    );
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT span_name, future_id, start_time, duration, input_args['request']['method'],
-               network_event_values
-             FROM spans WHERE span_type = 'network_span'"
-        ),
-        vec![vec![
-            json!(format!("GET {URL}")),
-            recording.span(ROOT),
-            at(10_000),
-            json!(21_000),
-            json!("GET"),
-            json!([
-                {"event_name": "connection", "payload": null, "timestamp": at(20_000)},
-                {"event_name": "data", "payload": null, "timestamp": at(30_000)},
-                {"event_name": "end", "payload": null, "timestamp": at(30_000)},
-                {"event_name": "await", "payload": null, "timestamp": at(31_000)},
-            ]),
-        ]]
-    );
+    assert_eq!(rows(&mut index, query), expected);
+    let issues: i64 = index
+        .connection()
+        .query_row("SELECT COUNT(*) FROM issue", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(issues, 0);
 }
 
 #[test]
 fn the_first_network_evidence_wins_and_invalid_evidence_is_skipped() {
     let project = tempfile::tempdir().unwrap();
     let recording = Recording::new(project.path());
+    let get = request(REQUEST, "GET", URL, 10_000);
     recording.write(
         1,
         proto::RecordingFile {
@@ -1010,34 +1026,33 @@ fn the_first_network_evidence_wins_and_invalid_evidence_is_skipped() {
             spans: Some(spans(vec![section(
                 ROOT,
                 vec![
-                    announce(REQUEST, "GET", URL, 10_000, None),
-                    complete(REQUEST, 20_000, proto::InvocationOutcome::Ok, None),
+                    announce(&get),
+                    complete(&get, 20_000, proto::InvocationOutcome::Ok, None),
                 ],
             )])),
             ..Default::default()
         },
     );
+    let post = proto::NetworkCompletion {
+        method: "POST".into(),
+        ..get.clone()
+    };
     recording.write(
         2,
         proto::RecordingFile {
             spans: Some(spans(vec![section(
-                CHILD,
+                ROOT,
                 vec![
-                    announce(REQUEST, "POST", URL, 10_000, None),
+                    announce(&post),
                     // A repeat of the same evidence is no conflict.
-                    complete(REQUEST, 20_000, proto::InvocationOutcome::Ok, None),
-                    complete(REQUEST, 25_000, proto::InvocationOutcome::Errored, None),
-                    event(0, "data", 21_000, None),
-                    complete(OTHER, 21_000, proto::InvocationOutcome::Unspecified, None),
-                    Event::NetworkAnnouncement(proto::NetworkAnnouncement {
-                        id: 102,
+                    complete(&get, 20_000, proto::InvocationOutcome::Ok, None),
+                    complete(&get, 25_000, proto::InvocationOutcome::Errored, None),
+                    // A start naming no parent, and one naming no span.
+                    announce(&proto::NetworkCompletion {
                         parent_id: 0,
-                        call_path_id: 2,
-                        started_at_ticks: 21_000,
-                        method: "GET".into(),
-                        url: URL.into(),
-                        request_cas_id: None,
+                        ..request(102, "GET", URL, 21_000)
                     }),
+                    announce(&request(0, "GET", URL, 21_000)),
                 ],
             )])),
             ..Default::default()
@@ -1073,17 +1088,16 @@ fn the_first_network_evidence_wins_and_invalid_evidence_is_skipped() {
         vec![
             issue("network_completion_conflict", "100"),
             issue("network_evidence_invalid", "0"),
-            issue("network_evidence_invalid", "101"),
             issue("network_evidence_invalid", "102"),
             issue("network_span_conflict", "100"),
         ]
     );
-    let stored: Vec<(i64, i64)> = conn
-        .prepare("SELECT defined, conflict FROM network_span")
+    let stored: Vec<i64> = conn
+        .prepare("SELECT conflict FROM network_span")
         .unwrap()
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+        .query_map([], |r| r.get(0))
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap();
-    assert_eq!(stored, vec![(1, 1)], "invalid evidence leaves no row");
+    assert_eq!(stored, vec![1], "invalid evidence leaves no row");
 }

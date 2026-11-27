@@ -299,7 +299,7 @@ pub const SPANS: Relation = Relation {
         ),
         value(
             "total_usage",
-            "model usage of every call under this span, itself included, as in self_usage. Counts calls whose own spans were not recorded. Empty without usage",
+            "model usage of every call under this span, itself included, as in self_usage, as the span's completion totaled it: a span under it that completed after it (a future that outlived its spawner) is not counted. Counts calls whose own spans were not recorded. Empty without usage",
         ),
         col(
             "span_reason",
@@ -325,12 +325,11 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
     e.multiplier, e.shift) AS end_time,
   __btel_duration(c.entered_ticks, c.exited_ticks, e.multiplier, e.shift, s.status,
     IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
-  __btel_ref(2, c.type_args_cas, NULL,
-    c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS type_args,
+  __btel_ref(2, c.type_args_cas, NULL, 0) AS type_args,
   -- Host adapters capture a named map (Python) or positional list (Node) as
   -- a value root. BAML functions capture FunctionArgs with a slot layout.
   __btel_ref(IIF(c.manual = 1 OR f.definition_key LIKE 'host:%', 2, 1), c.inputs_cas, f.argument_names,
-    c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
+    0) AS input_args,
   IIF(c.outcome = 1, __btel_ref(2, c.value_cas, NULL, 0), NULL) AS output_value,
   NULL AS network_event_values,
   IIF(c.outcome IN (2, 3), __btel_ref(IIF(c.manual = 1, 2, 3), c.value_cas, NULL, 0), NULL) AS error_value,
@@ -422,8 +421,7 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
   __btel_duration(n.started_ticks, n.completed_ticks, e.multiplier, e.shift, s.status,
     IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
   NULL AS type_args,
-  -- The request is due while only the completion is indexed.
-  __btel_ref(2, n.request_cas, NULL, n.defined = 0) AS input_args,
+  __btel_ref(2, n.request_cas, NULL, 0) AS input_args,
   NULL AS output_value,
   (SELECT __btel_events(v.at_ticks, v.seq, v.name, __btel_utc(v.at_ticks,
        IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns, e.multiplier, e.shift),
@@ -440,7 +438,7 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
   n.rec AS __parent_span_id_rec, n.parent_id AS __parent_span_id_key
 FROM main.network_span n
 JOIN main.recording r ON r.rec = n.rec
--- The context of the frame that sent the request, from its announcement.
+-- The context of the frame that sent the request.
 JOIN main.event_context ec ON ec.rec = n.rec AND ec.node_id = n.span_id AND ec.slot = 0
 LEFT JOIN main.context_snapshot cx ON cx.cas = ec.cas
 LEFT JOIN main.call_path p ON p.rec = n.rec AND p.call_path_id = n.call_path_id
@@ -462,20 +460,23 @@ pub const SPAN_ANNOUNCEMENTS: Relation = Relation {
         col("profiler_node_id", "text", "as in spans"),
         col("parent_span_id", "text", "as in spans"),
         col("start_time", "text", "RFC 3339 UTC"),
-        value("type_args", "as in spans"),
-        value("input_args", "as in spans"),
+        value(
+            "type_args",
+            "as in spans; pending (capture_pending) while the span runs: it arrives with its completion",
+        ),
+        value("input_args", "as type_args"),
         value(
             "network_event_values",
-            "as in spans; an unfinished request's events so far",
+            "as in spans; empty while the request runs: its events arrive with its completion",
         ),
         col(
             "context_distinct_id",
             "text",
-            "announcement-time identity; NULL when absent or unavailable",
+            "start-time identity (from the span's start record, else its completion); NULL when absent or unavailable",
         ),
         value(
             "context_metadata",
-            "announcement-time metadata; unavailable without an announcement",
+            "start-time metadata, as context_distinct_id; unavailable when neither record carried a context",
         ),
         col(
             "is_complete",
@@ -494,10 +495,10 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
   __btel_pubid(r.recording_id, c.parent_id) AS parent_span_id,
   __btel_utc(c.entered_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS start_time,
-  __btel_ref(2, c.type_args_cas, NULL,
-    c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS type_args,
+  -- A running call's captures arrive with its completion.
+  __btel_ref(2, c.type_args_cas, NULL, c.outcome IS NULL) AS type_args,
   __btel_ref(IIF(c.manual = 1 OR f.definition_key LIKE 'host:%', 2, 1), c.inputs_cas, f.argument_names,
-    c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
+    c.outcome IS NULL) AS input_args,
   NULL AS network_event_values,
   cx.distinct_id AS context_distinct_id,
   __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
@@ -556,7 +557,7 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
   __btel_utc(n.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS start_time,
   NULL AS type_args,
-  __btel_ref(2, n.request_cas, NULL, n.defined = 0) AS input_args,
+  __btel_ref(2, n.request_cas, NULL, n.outcome IS NULL) AS input_args,
   (SELECT __btel_events(v.at_ticks, v.seq, v.name, __btel_utc(v.at_ticks,
        IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns, e.multiplier, e.shift),
        v.payload_cas)
@@ -573,9 +574,7 @@ JOIN main.event_context ec ON ec.rec = n.rec AND ec.node_id = n.span_id AND ec.s
 LEFT JOIN main.context_snapshot cx ON cx.cas = ec.cas
 LEFT JOIN main.call_path p ON p.rec = n.rec AND p.call_path_id = n.call_path_id
 LEFT JOIN main.thread t ON t.rec = n.rec AND t.thread_id = n.thread_id
-LEFT JOIN main.epoch e ON e.rec = n.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
--- Events alone name a span, but say nothing else about it.
-WHERE n.defined = 1 OR n.outcome IS NOT NULL",
+LEFT JOIN main.epoch e ON e.rec = n.rec AND e.epoch_id = t.epoch_id AND e.defined = 1",
 };
 
 pub const RELATIONS: &[Relation] = &[PROCESSES, PROFILER, SPANS, SPAN_ANNOUNCEMENTS];

@@ -9,7 +9,6 @@ mod body;
 pub mod build;
 pub mod delivery;
 pub mod liveness;
-mod metadata;
 mod plan;
 pub mod publisher;
 pub use publisher::{CloudPublisher, CloudPublisherConfig};

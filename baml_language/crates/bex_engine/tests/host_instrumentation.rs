@@ -143,14 +143,10 @@ async fn host_context_and_recording_owner_have_independent_lifetimes() {
             }
             for section in file.spans.unwrap().sections {
                 for event in section.events {
-                    match event.event.unwrap() {
-                        proto::span_event::Event::FunctionAnnouncement(entry) => {
-                            entries.push((section.thread_id, entry));
-                        }
-                        proto::span_event::Event::FunctionCompletion(done) => {
-                            completions.push(done);
-                        }
-                        _ => {}
+                    if let proto::span_event::Event::FunctionCompletion(done) = event.event.unwrap()
+                    {
+                        entries.push((section.thread_id, start_of(&done)));
+                        completions.push(done);
                     }
                 }
             }
@@ -166,8 +162,10 @@ async fn host_context_and_recording_owner_have_independent_lifetimes() {
             .find(|(_, entry)| functions[&paths[&entry.call_path_id]] == "child")
             .unwrap();
         assert_eq!(threads[thread], Some(host.id));
-        assert!(host.inputs_cas_id.is_some());
         let parent_end = completions.iter().find(|done| done.id == host.id).unwrap();
+        // The start record is slim; the completion carries the inputs.
+        assert!(host.inputs_cas_id.is_none());
+        assert!(parent_end.inputs_cas_id.is_some());
         assert!(parent_end.value_cas_id.is_some());
         assert!(parent_end.exited_at_ticks <= child.entered_at_ticks);
     }
@@ -330,7 +328,7 @@ async fn host_definitions_and_call_sites_are_structural_across_modes() {
                     .filter(|event| {
                         matches!(
                             event.event,
-                            Some(proto::span_event::Event::FunctionAnnouncement(_))
+                            Some(proto::span_event::Event::FunctionCompletion(_))
                         )
                     })
                     .count();
@@ -550,14 +548,10 @@ async fn callback_options_resolve_once_and_reserved_id_reaches_recording() {
         for file in btel_core::recording::read_directory(path).unwrap().files {
             for section in file.spans.unwrap().sections {
                 for event in section.events {
-                    match event.event.unwrap() {
-                        proto::span_event::Event::FunctionAnnouncement(entry) => {
-                            entries.push(entry);
-                        }
-                        proto::span_event::Event::FunctionCompletion(done) => {
-                            completions.push(done);
-                        }
-                        _ => {}
+                    if let proto::span_event::Event::FunctionCompletion(done) = event.event.unwrap()
+                    {
+                        entries.push(start_of(&done));
+                        completions.push(done);
                     }
                 }
             }
@@ -568,12 +562,24 @@ async fn callback_options_resolve_once_and_reserved_id_reaches_recording() {
             "Hidden/Timing emit no callback span; explicit Span and reservation do"
         );
         assert_eq!(completions.len(), 2);
-        assert!(entries.iter().all(|entry| entry.inputs_cas_id.is_some()));
+        assert!(completions.iter().all(|done| done.inputs_cas_id.is_some()));
         assert!(completions.iter().all(|done| done.value_cas_id.is_some()));
         assert!(
             entries
                 .iter()
                 .any(|entry| entry.id == reserved_id.unwrap().get())
         );
+    }
+}
+
+/// A span's start as its end record carries it: since recording minor 17 a
+/// start record is written only for a span still open when its file seals.
+fn start_of(done: &proto::FunctionCompletion) -> proto::FunctionAnnouncement {
+    proto::FunctionAnnouncement {
+        id: done.id,
+        parent_id: done.parent_id,
+        call_path_id: u32::try_from(done.node >> 1).unwrap(),
+        entered_at_ticks: done.entered_at_ticks,
+        ..Default::default()
     }
 }

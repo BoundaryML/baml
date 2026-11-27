@@ -123,15 +123,18 @@ async fn trace_capture_reaches_cas_with_exact_values() {
         let path = &paths[&u32::try_from(done.node >> 1).unwrap()];
         assert_eq!(path.thread_id, thread);
         if let Some(value) = done.value_cas_id {
-            let (entry_thread, entry) = announcements.remove(&invocation).unwrap();
+            // A start record only if the call was open when its file sealed.
+            let (entry_thread, entry) = announcements
+                .remove(&invocation)
+                .unwrap_or((thread, start_of(&done)));
             assert_eq!(thread, entry_thread);
             assert_eq!(done.parent_id, entry.parent_id);
             assert_eq!(done.entered_at_ticks, entry.entered_at_ticks);
             assert_eq!(done.node >> 1, u64::from(entry.call_path_id));
             let flags = CompletionFlags::from_wire(done.completion_flags, false).unwrap();
-            assert!(flags.requires_announcement());
+            assert!(!flags.requires_announcement());
             assert_eq!(
-                read_string_capture(root.path(), entry.inputs_cas_id.unwrap(), true),
+                read_string_capture(root.path(), done.inputs_cas_id.unwrap(), true),
                 input
             );
             let outcome = done.completion_flags & 3;
@@ -348,14 +351,15 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
                         assert!(threads.insert(section.thread_id, done).is_none());
                     }
                     proto::span_event::Event::FunctionAnnouncement(entry) => {
-                        assert!(entry.inputs_cas_id.is_some());
+                        assert!(entry.inputs_cas_id.is_none());
                         announcements += 1;
                     }
                     proto::span_event::Event::FunctionCompletion(done) => {
                         let flags =
                             CompletionFlags::from_wire(done.completion_flags, false).unwrap();
                         assert!(done.value_cas_id.is_some());
-                        assert!(flags.requires_announcement());
+                        assert!(done.inputs_cas_id.is_some());
+                        assert!(!flags.requires_announcement());
                         *completions.entry(done.node).or_default() += 1;
                     }
                     _ => {}
@@ -364,7 +368,8 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
         }
     }
     assert!(threads.len() >= 2, "root and child must both finish");
-    assert_eq!(announcements, 2);
+    // Start records only for calls open when their file sealed.
+    assert!(announcements <= 2);
     assert_eq!(completions.values().sum::<u64>(), 2);
     for (node, count) in completions {
         assert_eq!(aggregates[&node], count, "span must aggregate exactly once");
@@ -464,7 +469,7 @@ fn telemetry_environment_modes() {
         else if mode == "high" {
             assert!(spans > 0);
             assert_eq!(aggregates, spans);
-            assert_eq!(announcements, spans);
+            assert!(announcements <= spans);
         } else {
             assert!(aggregates > 0);
             assert_eq!((spans, announcements), (0, 0));
@@ -552,4 +557,16 @@ async fn user_recordings_honor_baml_home() {
         found_output,
         "expected an output snapshot in the relocated CAS"
     );
+}
+
+/// A span's start as its end record carries it: since recording minor 17 a
+/// start record is written only for a span still open when its file seals.
+fn start_of(done: &proto::FunctionCompletion) -> proto::FunctionAnnouncement {
+    proto::FunctionAnnouncement {
+        id: done.id,
+        parent_id: done.parent_id,
+        call_path_id: u32::try_from(done.node >> 1).unwrap(),
+        entered_at_ticks: done.entered_at_ticks,
+        ..Default::default()
+    }
 }
