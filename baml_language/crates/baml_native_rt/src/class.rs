@@ -191,13 +191,36 @@ pub(crate) unsafe fn write_value(
     value: Value,
     ty: Option<Desc>,
 ) {
+    // SAFETY: the caller's contract.
+    unsafe { write_nested(mutator, out, value, ty, 0) }
+}
+
+/// How deep [`write_value`] goes into objects inside objects before it
+/// writes [`TOO_DEEP`]: a value can hold itself, and the writer runs on
+/// whatever stack it was called on.
+const MOST_DEPTH: usize = 32;
+const TOO_DEEP: &str = "<nested too deep>";
+
+/// [`write_value`] at `depth` objects in.
+///
+/// # Safety
+///
+/// As [`write_value`].
+unsafe fn write_nested(
+    mutator: &Mutator,
+    out: &mut String,
+    value: Value,
+    ty: Option<Desc>,
+    depth: usize,
+) {
     let ty = ty.map(Desc::not_null);
     match value.id() {
         _ if ty.is_some_and(|ty| ty.kind() == KIND_OPAQUE) => out.push_str("<object>"),
         TAG_NULL => out.push_str("null"),
         TAG_BOOL | TAG_INT | TAG_FLOAT => write_scalar(out, value),
+        _ if depth >= MOST_DEPTH => out.push_str(TOO_DEEP),
         // SAFETY: the caller's contract: any other tag is of a pointer.
-        _ => unsafe { write_object(mutator, out, value.payload, ty) },
+        _ => unsafe { write_object(mutator, out, value.payload, ty, depth + 1) },
     }
 }
 
@@ -207,7 +230,13 @@ pub(crate) unsafe fn write_value(
 /// # Safety
 ///
 /// `value` is a live object, of the type `ty` when there is one.
-unsafe fn write_object(mutator: &Mutator, out: &mut String, value: usize, ty: Option<Desc>) {
+unsafe fn write_object(
+    mutator: &Mutator,
+    out: &mut String,
+    value: usize,
+    ty: Option<Desc>,
+    depth: usize,
+) {
     // SAFETY: the caller's contract: a variant holds its name, and an
     // instance has the fields its class's description names.
     unsafe {
@@ -230,7 +259,7 @@ unsafe fn write_object(mutator: &Mutator, out: &mut String, value: usize, ty: Op
                         out.push_str(", ");
                     }
                     let held = Value::load(array::element(value, index));
-                    write_value(mutator, out, held, element);
+                    write_nested(mutator, out, held, element, depth);
                 }
                 out.push(']');
             }
@@ -243,9 +272,9 @@ unsafe fn write_object(mutator: &Mutator, out: &mut String, value: usize, ty: Op
                     if !std::mem::take(&mut first) {
                         out.push_str(", ");
                     }
-                    write_value(mutator, out, entry_key, key);
+                    write_nested(mutator, out, entry_key, key, depth);
                     out.push_str(": ");
-                    write_value(mutator, out, entry_value, held);
+                    write_nested(mutator, out, entry_value, held, depth);
                 });
                 out.push('}');
             }
@@ -266,7 +295,7 @@ unsafe fn write_object(mutator: &Mutator, out: &mut String, value: usize, ty: Op
                     match field.ty {
                         Some(ty) => {
                             let held = Value::load(value + field.offset);
-                            write_value(mutator, out, held, Some(ty));
+                            write_nested(mutator, out, held, Some(ty), depth);
                         }
                         None => out.push_str("<object>"),
                     }

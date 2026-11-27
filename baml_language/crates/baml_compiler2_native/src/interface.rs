@@ -313,6 +313,22 @@ impl Walk<'_> {
     }
 }
 
+/// Whether the runtime can be told what a value of `ty` is: the library
+/// checks what a host passes against that description. A class with
+/// `@json.flatten` or `@json.fallback` fields, or with a `to_json` or
+/// `from_json` of its own, has none a library can use yet.
+fn describable(db: &dyn baml_compiler2_mir::Db, ty: &RuntimeTy) -> Result<(), String> {
+    crate::json::JsonTypes::new()
+        .describe(db, ty)
+        .map(drop)
+        .map_err(|blocker| {
+            format!(
+                "a type the library cannot describe `{}`: {blocker}",
+                type_text(db, ty)
+            )
+        })
+}
+
 fn head_of(ty: &RuntimeTy) -> &baml_type::DeclName {
     match ty {
         RuntimeTy::Enum(head) | RuntimeTy::EnumVariant(head, _) | RuntimeTy::Class(head, _) => head,
@@ -355,7 +371,7 @@ pub fn export_refusal(
                 .params
                 .iter()
                 .chain([&detail.result])
-                .try_for_each(|ty| walk.reach(ty))
+                .try_for_each(|ty| walk.reach(ty).and_then(|()| describable(db, ty)))
         })
         .err()
 }
@@ -421,7 +437,9 @@ pub(crate) fn library_detail<'db>(
             return Err(refuse("it has type parameters".to_owned()));
         }
         for ty in detail.params.iter().chain([&detail.result]) {
-            walk.reach(ty).map_err(refuse)?;
+            walk.reach(ty)
+                .and_then(|()| describable(db, ty))
+                .map_err(refuse)?;
         }
         // A thrown value is only read, never built: a throws type that
         // cannot cross does not keep the function from being exported. Its
@@ -429,7 +447,7 @@ pub(crate) fn library_detail<'db>(
         let throws_text = detail.throws.as_ref().map(|ty| type_text(db, ty));
         if let Some(ty) = &detail.throws {
             let mut trial = walk.clone();
-            if trial.reach(ty).is_ok() {
+            if trial.reach(ty).is_ok() && describable(db, ty).is_ok() {
                 walk = trial;
             } else {
                 detail.throws = None;
