@@ -2185,9 +2185,18 @@ fn source_aware_tir_type_error_message(
                 ty(other_type)
             )
         }
-        TirTypeError::ThrowsContractViolation { declared, extra } => {
+        TirTypeError::ThrowsContractViolation {
+            declared,
+            extra,
+            unknown_help,
+        } => {
+            let help = unknown_help.as_ref().map_or_else(String::new, |help| {
+                baml_compiler2_hir_ty::diagnostics::unknown_throws_violation_help(
+                    declared, help, &ty,
+                )
+            });
             format!(
-                "declared throws is `{}`, but this function may also throw `{}`",
+                "declared throws is `{}`, but this function may also throw `{}`{help}",
                 ty(declared),
                 ty(extra)
             )
@@ -2645,6 +2654,385 @@ function demo() -> int throws never {
         // The concrete-type violation carries no callback-provenance related
         // info (that path only fires when the thrown type cannot be named).
         assert!(diag.related_info.is_empty());
+    }
+
+    /// The E0096 messages `source` produces, in source order.
+    fn throws_violations(source: &str) -> Vec<String> {
+        let (db, file) = single_file(source);
+        check_file(&db, file)
+            .into_iter()
+            .filter(|diag| diag.id == DiagnosticId::ThrowsContractViolation)
+            .map(|diag| diag.message)
+            .collect()
+    }
+
+    #[test]
+    fn uncovered_unknown_from_a_stored_function_type_suggests_unknown_error() {
+        // The help leads with declaring a specific error type at the source,
+        // then the `UnknownError` fallback, then what removing the clause does.
+        let messages = throws_violations(
+            r#"class Boom {
+    message: string,
+}
+
+class Tool {
+    run: () -> int throws unknown,
+}
+
+function run_tool(tool: Tool) -> int throws Boom {
+    (tool.run)()
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        assert_eq!(
+            message,
+            "declared throws is `Boom`, but this function may also throw `unknown`\n\
+             help: declare a specific error type where `unknown` comes from: a function \
+             type or interface method written `throws unknown` should name the error type \
+             its implementations must throw\n\
+             help: if the `unknown` comes from code you don't control, convert it where \
+             it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`, \
+             then declare `throws Boom | baml.errors.UnknownError`. Removing the clause, or \
+             writing `throws Boom | _`, also compiles, but passes `unknown` on to callers"
+        );
+    }
+
+    #[test]
+    fn uncovered_unknown_under_throws_never_suggests_wrapping_everything() {
+        // `throws never` names no known error, so the conversion is
+        // `from<never>` and the open spelling `throws never | _` is not offered.
+        let messages = throws_violations(
+            r#"class Tool {
+    run: () -> int throws unknown,
+}
+
+function run_tool(tool: Tool) -> int throws never {
+    (tool.run)()
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        assert_eq!(
+            message,
+            "declared throws is `never`, but this function may also throw `unknown`\n\
+             help: declare a specific error type where `unknown` comes from: a function \
+             type or interface method written `throws unknown` should name the error type \
+             its implementations must throw\n\
+             help: if the `unknown` comes from code you don't control, convert it where \
+             it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<never>(e) }`, \
+             then declare `throws baml.errors.UnknownError`. Removing the `throws` clause \
+             also compiles, but passes `unknown` on to callers"
+        );
+    }
+
+    #[test]
+    fn uncovered_unknown_from_a_callee_parameter_names_that_parameter() {
+        // `apply` writes `throws unknown` on its callback, so the caller's
+        // `Boom` is erased even though it catches `Boom`. The first help line
+        // points at the parameter; the general one follows.
+        let messages = throws_violations(
+            r#"class Boom {
+    message: string,
+}
+
+function apply(f: () -> int throws unknown) -> int {
+    f()
+}
+
+function caller() -> int throws never {
+    apply(() -> int { throw Boom { message: "x" } }) catch (e) {
+        Boom => 0,
+    }
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        let lines: Vec<&str> = message.lines().collect();
+        assert_eq!(
+            lines.len(),
+            3,
+            "message, parameter help, general help: {message}"
+        );
+        assert_eq!(
+            lines[1],
+            "help: parameter `f` of `apply` is declared `throws unknown`, which hides what \
+             the function passed to it throws. Declare the specific error type it must throw \
+             instead, or remove `throws unknown` so a call to `apply` throws what its \
+             argument throws"
+        );
+        assert!(
+            lines[2].contains("UnknownError.from<never>(e)"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn uncovered_unknown_from_the_function_s_own_parameter_names_it() {
+        let messages = throws_violations(
+            r#"class Boom {
+    message: string,
+}
+
+function call_it(f: () -> int throws unknown) -> int throws Boom {
+    f()
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        let lines: Vec<&str> = message.lines().collect();
+        assert_eq!(
+            lines.len(),
+            3,
+            "message, parameter help, general help: {message}"
+        );
+        assert_eq!(
+            lines[1],
+            "help: parameter `f` is declared `throws unknown`, which hides what the function \
+             passed to it throws. Declare the specific error type it must throw instead, or \
+             remove `throws unknown` so BAML infers what `f` throws at each call"
+        );
+        assert!(lines[2].contains("UnknownError.from<Boom>(e)"), "{message}");
+    }
+
+    #[test]
+    fn uncovered_unknown_from_a_method_parameter_names_that_parameter() {
+        // The callee is reached through a value (`runner.apply`), the shape
+        // a registry method has.
+        let messages = throws_violations(
+            r#"class Boom {
+    message: string,
+}
+
+class Runner {
+    label: string,
+
+    function apply(self, f: () -> int throws unknown) -> int {
+        f()
+    }
+}
+
+function caller(runner: Runner) -> int throws never {
+    runner.apply(() -> int { throw Boom { message: "x" } }) catch (e) {
+        Boom => 0,
+    }
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        let lines: Vec<&str> = message.lines().collect();
+        assert_eq!(
+            lines.len(),
+            3,
+            "message, parameter help, general help: {message}"
+        );
+        assert!(
+            lines[1].starts_with("help: parameter `f` of `apply` is declared `throws unknown`"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn clause_that_already_lists_unknown_error_is_not_told_to_add_it_again() {
+        // The state right after following the help at one call: the clause
+        // names `UnknownError`, and another call still lets `unknown` out.
+        // The conversion targets the other declared types only.
+        let messages = throws_violations(
+            r#"class Boom {
+    message: string,
+}
+
+class Tool {
+    run: () -> int throws unknown,
+}
+
+function run_tool(tool: Tool) -> int throws Boom | baml.errors.UnknownError {
+    (tool.run)()
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        let lines: Vec<&str> = message.lines().collect();
+        assert_eq!(lines.len(), 3, "{message}");
+        assert_eq!(
+            lines[2],
+            "help: if the `unknown` comes from code you don't control, convert it where \
+             it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`; \
+             the clause already lists `baml.errors.UnknownError`. Removing the clause, or \
+             writing `throws baml.errors.UnknownError | Boom | _`, also compiles, but passes \
+             `unknown` on to callers"
+        );
+    }
+
+    #[test]
+    fn unknown_from_elsewhere_in_a_callee_does_not_blame_an_inferred_parameter() {
+        // `apply` leaves the callback's clause off, so it is inferred per
+        // call. The `unknown` comes from the stored `tool.run`, and no
+        // parameter is named.
+        let messages = throws_violations(
+            r#"class Tool {
+    run: () -> int throws unknown,
+}
+
+function apply(tool: Tool, f: () -> int) -> int {
+    f() + (tool.run)()
+}
+
+function caller(tool: Tool) -> int throws never {
+    apply(tool, () -> int { 1 })
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        assert!(message.contains("may also throw `unknown`"), "{message}");
+        assert!(!message.contains("parameter"), "{message}");
+        assert_eq!(message.lines().count(), 3, "{message}");
+    }
+
+    #[test]
+    fn unused_unknown_parameter_of_a_callee_is_not_blamed() {
+        // `f` writes `throws unknown` but `apply` never calls it; the
+        // `unknown` comes from the stored `tool.run`.
+        let messages = throws_violations(
+            r#"class Tool {
+    run: () -> int throws unknown,
+}
+
+function apply(tool: Tool, f: () -> int throws unknown) -> int {
+    (tool.run)()
+}
+
+function caller(tool: Tool) -> int throws never {
+    apply(tool, () -> int { 1 })
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        assert!(message.contains("may also throw `unknown`"), "{message}");
+        assert!(!message.contains("parameter"), "{message}");
+        assert_eq!(message.lines().count(), 3, "{message}");
+    }
+
+    #[test]
+    fn unknown_parameter_of_a_callee_is_not_blamed_when_unknown_also_enters_elsewhere() {
+        // `apply` calls `f`, which writes `throws unknown`, and also the
+        // stored `tool.run`. Removing `f`'s clause would not close the
+        // effect, so `f` is not named.
+        let messages = throws_violations(
+            r#"class Tool {
+    run: () -> int throws unknown,
+}
+
+function apply(tool: Tool, f: () -> int throws unknown) -> int {
+    f() + (tool.run)()
+}
+
+function caller(tool: Tool) -> int throws never {
+    apply(tool, () -> int { 1 })
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        assert!(message.contains("may also throw `unknown`"), "{message}");
+        assert!(!message.contains("parameter"), "{message}");
+        assert_eq!(message.lines().count(), 3, "{message}");
+    }
+
+    #[test]
+    fn unknown_parameter_is_not_blamed_when_a_catch_merges_it_with_another_source() {
+        // The `catch` base calls `f` and the stored `tool.run`; what its arm
+        // leaves is re-recorded as one fact, so neither source is named.
+        let messages = throws_violations(
+            r#"class Boom {
+    message: string,
+}
+
+class Tool {
+    run: () -> int throws unknown,
+}
+
+function apply(tool: Tool, f: (int) -> int throws unknown) -> int {
+    f((tool.run)()) catch (e) {
+        Boom => 0,
+    }
+}
+
+function caller(tool: Tool) -> int throws never {
+    apply(tool, (x: int) -> int { x })
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        assert!(message.contains("may also throw `unknown`"), "{message}");
+        assert!(!message.contains("parameter"), "{message}");
+        assert_eq!(message.lines().count(), 3, "{message}");
+    }
+
+    #[test]
+    fn unknown_parameter_is_not_blamed_when_an_alias_of_unknown_is_also_thrown() {
+        let messages = throws_violations(
+            r#"type AnyError = unknown
+
+function apply(f: () -> int throws unknown, e: AnyError) -> int {
+    let n = f();
+    if (n > 0) {
+        throw e;
+    }
+    n
+}
+
+function caller(e: AnyError) -> int throws never {
+    apply(() -> int { 1 }, e)
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        assert!(message.contains("may also throw"), "{message}");
+        assert!(!message.contains("parameter"), "{message}");
+    }
+
+    #[test]
+    fn uncovered_known_type_carries_no_unknown_error_help() {
+        let messages = throws_violations(
+            r#"class Boom {
+    message: string,
+}
+
+class Bang {
+    message: string,
+}
+
+function demo() -> int throws Boom {
+    throw Bang { message: "y" }
+}
+"#,
+        );
+        assert_eq!(
+            messages,
+            ["declared throws is `Boom`, but this function may also throw `Bang`"]
+        );
     }
 
     #[test]

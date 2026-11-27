@@ -337,6 +337,98 @@ impl fmt::Display for ShadowedParamOwner {
     }
 }
 
+/// A function-typed parameter that writes `throws unknown`, named by an E0096
+/// whose uncovered type is `unknown`. An omitted clause on such a parameter
+/// is inferred per call, so the written clause is what erases the caller's
+/// error type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownThrowsParam {
+    pub param: Name,
+    /// The called function that declares the parameter; `None` when it is a
+    /// parameter of the function the diagnostic is in.
+    pub callee: Option<Name>,
+}
+
+/// What an E0096 whose uncovered type is `unknown` needs to spell its help.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownThrowsHelp {
+    /// The declared clause without `baml.errors.UnknownError`: the `T` of
+    /// the `UnknownError.from<T>` the help suggests. `never` when the clause
+    /// declares nothing else.
+    pub known: Ty,
+    /// The clause already lists `baml.errors.UnknownError`, which is the
+    /// state right after following the help at one call and not yet at
+    /// another.
+    pub declares_unknown_error: bool,
+    /// The function-typed parameter the `unknown` enters through, if any.
+    pub param: Option<UnknownThrowsParam>,
+}
+
+/// The help lines of an E0096 whose uncovered type is `unknown`, each
+/// starting with a newline. `spell` is the renderer's own type speller, so
+/// this crate's `Display` and `baml_db`'s file-aware message share the
+/// wording.
+pub fn unknown_throws_violation_help(
+    declared: &Ty,
+    help: &UnknownThrowsHelp,
+    spell: &dyn Fn(&Ty) -> String,
+) -> String {
+    let mut text = String::new();
+    // Lead with a specific error type at the source of `unknown`; the
+    // `UnknownError` conversion is the fallback for code the user does not
+    // control.
+    match &help.param {
+        Some(UnknownThrowsParam {
+            param,
+            callee: Some(callee),
+        }) => {
+            let _ = write!(
+                text,
+                "\nhelp: parameter `{param}` of `{callee}` is declared `throws unknown`, which hides what the function passed to it throws. Declare the specific error type it must throw instead, or remove `throws unknown` so a call to `{callee}` throws what its argument throws"
+            );
+        }
+        Some(UnknownThrowsParam {
+            param,
+            callee: None,
+        }) => {
+            let _ = write!(
+                text,
+                "\nhelp: parameter `{param}` is declared `throws unknown`, which hides what the function passed to it throws. Declare the specific error type it must throw instead, or remove `throws unknown` so BAML infers what `{param}` throws at each call"
+            );
+        }
+        None => text.push_str(
+            "\nhelp: declare a specific error type where `unknown` comes from: a function type or interface method written `throws unknown` should name the error type its implementations must throw",
+        ),
+    }
+    let known = spell(&help.known);
+    let _ = write!(
+        text,
+        "\nhelp: if the `unknown` comes from code you don't control, convert it where it enters: `catch_all (e) {{ _ => throw baml.errors.UnknownError.from<{known}>(e) }}`"
+    );
+    if help.declares_unknown_error {
+        text.push_str("; the clause already lists `baml.errors.UnknownError`");
+    } else if matches!(help.known, Ty::Never) {
+        text.push_str(", then declare `throws baml.errors.UnknownError`");
+    } else {
+        let _ = write!(
+            text,
+            ", then declare `throws {known} | baml.errors.UnknownError`"
+        );
+    }
+    if matches!(declared, Ty::Never) {
+        text.push_str(
+            ". Removing the `throws` clause also compiles, but passes `unknown` on to callers",
+        );
+    } else {
+        let _ = write!(
+            text,
+            ". Removing the clause, or writing `throws {} | _`, also compiles, but passes `unknown` on to callers",
+            spell(declared)
+        );
+    }
+    text
+}
+
 /// What went wrong — no location info, just the semantic error.
 ///
 /// `TirTypeError` is intentionally span-free for Salsa cacheability.
@@ -800,6 +892,9 @@ pub enum TirTypeError {
         /// What the body may throw beyond the clause, as ONE type so the
         /// renderer parenthesizes what needs it.
         extra: Ty,
+        /// `Some` exactly when `extra` is or includes `unknown`: what the
+        /// message's help lines are spelled from.
+        unknown_help: Option<UnknownThrowsHelp>,
     },
     /// Inferred escaping throws are explainable through a single callback path.
     CallbackThrowsContractViolation {
@@ -2310,13 +2405,25 @@ impl TirTypeError {
                     f,
                     "invalid catch binding type `{type_name}`; use a concrete type instead"
                 ),
-                TirTypeError::ThrowsContractViolation { declared, extra } => {
+                TirTypeError::ThrowsContractViolation {
+                    declared,
+                    extra,
+                    unknown_help,
+                } => {
                     write!(
                         f,
                         "declared throws is `{}`, but this function may also throw `{}`",
                         declared.spell(vp),
                         extra.spell(vp)
-                    )
+                    )?;
+                    match unknown_help {
+                        Some(help) => f.write_str(&unknown_throws_violation_help(
+                            declared,
+                            help,
+                            &|ty: &Ty| ty.spell(vp),
+                        )),
+                        None => Ok(()),
+                    }
                 }
                 TirTypeError::CallbackThrowsContractViolation {
                     callback_name,

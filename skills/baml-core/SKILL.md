@@ -80,15 +80,20 @@ The rest of the language:
 
 ## Errors
 
-- **Raise** with `throw baml.errors.InvalidArgument { message: "…" }` or an instance of your own class (error types are ordinary classes; the builtins are `baml.errors.*`: `InvalidArgument`/`ParseError`/`Io`/`Timeout`/…; `baml describe baml.errors`). Annotate a fallible signature with `-> T throws ErrType`. Errors propagate implicitly; callers needn't re-declare.
-- **`catch` for some, `catch_all` for all.** `expr catch (e) { baml.errors.ParseError => fallback }` handles a *specific* error and lets the rest propagate; `expr catch_all (e) { _ => fallback }` is *exhaustive*, for a workflow top / entrypoint.
+- **Raise** with `throw baml.errors.InvalidArgument { message: "…" }` or an instance of your own class (error types are ordinary classes; the builtins are `baml.errors.*`: `InvalidArgument`/`ParseError`/`Io`/`Timeout`/…; `baml describe baml.errors`). Errors propagate implicitly; callers needn't re-declare.
+- **`throws` is inferred.** Leave it off a function, a lambda, or a function-typed parameter (`f: () -> int` throws whatever the argument throws) and the compiler works it out. Write it to pin a contract (guideline 19): `-> T throws ErrType`, or `throws ErrType | _` to pin some types and infer the rest. It must be written on interface methods and on stored function types (a class field, an alias body, a list or map element).
+- **`catch` for some, `catch_all` for all.** `expr catch (e) { baml.errors.ParseError => fallback }` handles a *specific* error and lets the rest propagate; `expr catch_all (e) { baml.errors.ParseError => fallback, _ => … }` must cover every error, for a workflow top / entrypoint. Don't return a default from a `_` arm: that hides a failure nobody planned for. Record `e` or rethrow it. Convert an error to text (`e.to_string()`) only where it is stored or shown; until then pass the value, so callers can still match on it.
+- **Declare the errors callers must handle; avoid `throws unknown`.** Where a clause must be written (a stored function type, an interface method), declare the error type implementors must throw: `run: (string) -> string throws ToolFailed`. An implementor converts its own errors to that type, and a caller matches it with named arms. `throws unknown` is an anti-pattern: a caller can still let the error propagate, but the one that handles it needs a `_` arm, and a new error compiles silently. On a function with a body or a function-typed parameter, leave the clause off rather than write `throws unknown`. See guideline 30.
+- **`baml.errors.UnknownError` is a fallback** for an error of unknown type that reaches you anyway, from code you don't control. Convert it at that boundary: `f(input) catch_all (e) { _ => throw baml.errors.UnknownError.from<ToolFailed>(e) }` throws `ToolFailed | baml.errors.UnknownError`. `from<T>(e)` returns a `T` unchanged, unwraps an `UnknownError` that holds a `T`, and wraps anything else; `T` can be a union (`from<A | B>`). `with_message<T>(e, "…")` also adds context, and `u.data` is the wrapped value. Prefer a declared error type where you can.
+- **Pick the error type by how much is known.** A union when the set is known (`throws NotFound | Timeout`); a class generic over its error type when there is one per instance (`class Step<E> { run: () -> string throws E, }`); an associated type when there is one per implementor (`interface Store { type Error = never; function get(self, key: string) -> string throws Self.Error; }`, as `ai.Runner` does).
+- **A panic is not an error.** `baml.sys.panic("…")` and runtime faults like a missing subscript raise a `baml.panics.*` value. It is not part of `throws`, and a `_` arm does not catch it, in `catch_all` either; only an arm that names a `baml.panics.*` class does (`baml.panics.Panic` names them all). `await` re-raises a spawned task's panic in the awaiter, and `all_settled` reports it as `Panicked`. For cleanup that must run, use `defer`: it runs on a panic too.
 - **Error context.** `catch (e, ctx)` binds a **`baml.errors.Context`** alongside the error. An error thrown while handling another chains onto it, so `ctx.root_cause()` / `ctx.cause` walk back to the original failure and `ctx.to_string()` renders the whole chain (Python `__context__`-style).
 - Throw for failures; return a union of classes when every outcome is a normal result, like the states of a job. See the [Style guidelines](#style-guidelines).
 
 ## Concurrency and resources
 
-- **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with limit, token { … }`. Each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.sync.Semaphore.new(n)` caps concurrency (excess spawns queue; a running task takes a slot with `sem.with(fn)`), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. Use it to parallelize LLM and HTTP calls. Tasks run in parallel even between awaits, so guard an object's own state with `baml.sync.atomic(self, () -> { ... })`, or several objects at once with `baml.sync.atomic([a, b], ...)` (re-entrant; only other `atomic` blocks on the same key are excluded, code outside them is not protected). `baml describe spawn` / `baml describe baml.sync` / `baml describe baml.future`.
-- **Resource safety.** `defer { … }` runs a block at scope exit, LIFO, on *every* path (return / throw / fall-through), like Go. A class method named `function cleanup(self) -> void` is a **finalizer**: it runs at most once per instance whether you call it, `defer` it, or the GC reclaims it.
+- **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. A task that throws or panics with nobody awaiting it is still reported: it fails `baml test` (as `testing::unhandled_spawn_error`) and `baml run`. Configure a spawn with a `with` clause: `spawn with limit, token { … }`. Each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.sync.Semaphore.new(n)` caps concurrency (excess spawns queue; a running task takes a slot with `sem.with(fn)`), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. Use it to parallelize LLM and HTTP calls. Tasks run in parallel even between awaits, so guard an object's own state with `baml.sync.atomic(self, () -> { ... })`, or several objects at once with `baml.sync.atomic([a, b], ...)` (re-entrant; only other `atomic` blocks on the same key are excluded, code outside them is not protected). `baml describe spawn` / `baml describe baml.sync` / `baml describe baml.future`.
+- **Resource safety.** `defer { … }` runs a block at scope exit, LIFO, on *every* path (return / throw / panic / fall-through), like Go. A class method named `function cleanup(self) -> void` is a **finalizer**: it runs at most once per instance whether you call it, `defer` it, or the GC reclaims it.
 
 ## Tracing
 
@@ -1187,6 +1192,9 @@ inferred, a change deep in the call tree can add a new error that reaches your u
 change to the signature. Pin it on functions other packages or the generated SDK call, so
 that change is a compile error instead. Leave it inferred on internal helpers.
 
+Pin explicit types, never `throws unknown`: it accepts every later change, which is what
+pinning is there to prevent (guideline 30).
+
 Bad:
 
 ```baml
@@ -1400,7 +1408,8 @@ function email_domain(emails: map<string, string>, id: string) -> string
 ### 24. Catch the errors you can handle, not everything
 
 `_` also catches failures you didn't plan for. Name the errors you can recover from and let
-the rest propagate.
+the rest propagate. Where a `_` arm is needed, record or rethrow the error in it; don't return
+a default.
 
 Bad:
 
@@ -1586,6 +1595,69 @@ function order_total(subtotal: float, weight_kg: float, distance_km: float) -> f
     subtotal + shipping_cost(weight_kg, distance_km)
 }
 ```
+
+### 30. Declare the error type implementors must throw
+
+When you write a function type or interface method that others implement, declare the error
+type they must throw. Each implementor converts its own errors to it, and a caller handles it
+with `catch_all` and one named arm per type. Adding an error type later is then a compile
+error in that caller. `throws unknown` gives up all of this: a caller can let the error
+propagate, but whichever one handles it needs a `_` arm, and a `_` arm keeps compiling when a
+new error appears.
+
+Bad:
+
+```baml
+class Tool {
+    name: string,
+    run: (string) -> string throws unknown,
+}
+
+function answer(tool: Tool, input: string) -> string {
+    (tool.run)(input) catch_all (e) {
+        _ => "tool failed",
+    }
+}
+```
+
+Good:
+
+```baml
+class ToolFailed {
+    tool: string,
+    reason: string,
+}
+
+class Tool {
+    name: string,
+    run: (string) -> string throws ToolFailed,
+}
+
+function double_tool() -> Tool {
+    Tool {
+        name: "double",
+        run: (input: string) -> string {
+            let n = int.parse(input) catch (e) {
+                baml.errors.ParseError => throw ToolFailed {
+                    tool: "double",
+                    reason: e.to_string(),
+                },
+            };
+            `${n * 2}`
+        },
+    }
+}
+
+function answer(tool: Tool, input: string) -> string {
+    (tool.run)(input) catch_all (e) {
+        ToolFailed => `${e.tool} failed: ${e.reason}`,
+    }
+}
+```
+
+If an error of unknown type reaches you anyway, from code you don't control, convert it where
+it enters with `baml.errors.UnknownError.from<ToolFailed>(e)` and declare
+`throws ToolFailed | baml.errors.UnknownError`. Use this as a fallback, not as the contract.
 
 ### Project layout and conventions
 
