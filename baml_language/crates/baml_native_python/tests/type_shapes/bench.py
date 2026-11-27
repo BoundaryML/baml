@@ -9,8 +9,8 @@ call with `n` elements; their time is per element). `py` builds the same
 Python objects with no bridge at all; `BENCH_MODEL` picks how
 (`validate`, `construct`, or `native` for `object.__new__` and the slots,
 as the native module does). For the native bindings `BENCH_MODEL` also
-picks the module's model mode, and `BENCH_RELEASE_GIL=1` releases the GIL
-while BAML runs.
+picks the module's model mode, and `BENCH_RELEASE_GIL=0` holds the GIL
+while BAML runs (the module releases it by default).
 
 Instructions per call come from running a case at two sizes under
 `/usr/bin/time -l` and dividing the difference.
@@ -50,7 +50,7 @@ if NATIVE:
     import baml_native
 
     baml_native.set_model_mode(MODEL)
-    baml_native.set_release_gil(os.environ.get("BENCH_RELEASE_GIL") == "1")
+    baml_native.set_release_gil(os.environ.get("BENCH_RELEASE_GIL", "1") == "1")
 
 ARRAY_CASES = {"ints_out", "ints_in", "points_out", "points_in"}
 

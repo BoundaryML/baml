@@ -70,6 +70,20 @@ async def test_gather():
     assert await asyncio.gather(add(1, 1), nap(5), env_or("NO_SUCH_VAR_X", "fb")) == [2, 5, "fb"]
 
 
+def test_a_call_that_ends_in_its_first_turn_needs_no_loop():
+    # Its first step returns the result: no future, no trip around a loop,
+    # and no running loop is needed at all.
+    call = add(20, 22)
+    with pytest.raises(StopIteration) as stopped:
+        call.send(None)
+    assert stopped.value.value == 42
+    with pytest.raises(RuntimeError, match="no running event loop"):
+        nap(5).send(None)  # this one must wait, and has no loop to wait on
+    # Its BAML call went on; a sync call's turns see it end and free it.
+    assert nap_sync(20) == 20
+    assert baml_native.calls_in_flight() == 0
+
+
 async def test_wait_for():
     assert await asyncio.wait_for(add(4, 4), 1) == 8
     assert await asyncio.wait_for(nap(5), 1) == 5
@@ -105,12 +119,12 @@ async def test_many_calls_at_once():
     assert baml_native.handle_count() == before
 
 
-async def test_many_calls_at_once_with_the_gil_released():
-    baml_native.set_release_gil(True)
+async def test_many_calls_at_once_with_the_gil_held():
+    baml_native.set_release_gil(False)
     try:
         await test_many_calls_at_once()
     finally:
-        baml_native.set_release_gil(False)
+        baml_native.set_release_gil(True)
 
 
 async def test_sync_call_delivers_other_calls_ending_meanwhile():

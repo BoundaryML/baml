@@ -7,7 +7,7 @@ each a median of 3 runs in one process) and the instructions per call (the
 difference between runs at n and 2n under /usr/bin/time -l, over n). A
 configuration is `<sdk> <mode> <model>[ gil]`: today's SDK (`vm`) or the
 native bindings, async, sync, or pure Python (`py`), and how models are
-made; `gil` releases the GIL while BAML runs. Run setup.sh first, and this
+made; `held` holds the GIL while BAML runs (released by default). Run setup.sh first, and this
 under `perfq run --bench`.
 """
 
@@ -43,7 +43,7 @@ def env(config):
         os.environ,
         PYTHONPATH=f"{path}:{WORK / 'tests'}",
         BENCH_MODEL=model,
-        BENCH_RELEASE_GIL="1" if "gil" in rest else "0",
+        BENCH_RELEASE_GIL="0" if "held" in rest else "1",
     )
 
 

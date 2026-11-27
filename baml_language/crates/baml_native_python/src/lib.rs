@@ -22,6 +22,8 @@
 //!   loop is closed or has no call in flight, and is refused otherwise.
 //! - **Sync calls** start the call and turn until it ends, waiting for
 //!   `wake` or the next timer with the GIL released.
+//! - **The GIL** is released while BAML runs in a turn, and taken again for
+//!   each result copied.
 
 mod plan;
 
@@ -60,8 +62,11 @@ struct Hooks {
 
 static HOOKS: PyOnceLock<Hooks> = PyOnceLock::new();
 static RUNTIME: PyOnceLock<Runtime> = PyOnceLock::new();
-/// Whether a turn releases the GIL while BAML runs.
-static RELEASE_GIL: AtomicBool = AtomicBool::new(false);
+/// Whether a turn releases the GIL while BAML runs. It does by default:
+/// that costs about 30 ns on a call that ends at once and nothing measurable
+/// on a long one, and holding it would stop every other Python thread for
+/// the whole of a long BAML computation.
+static RELEASE_GIL: AtomicBool = AtomicBool::new(true);
 
 /// What the library's `wake` reaches, from any thread.
 struct Wake {
