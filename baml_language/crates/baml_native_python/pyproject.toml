@@ -1,0 +1,14 @@
+[project]
+name = "baml_native"
+version = "0.0.0"
+description = "BAML compiled to machine code, called from Python (proof of concept)"
+requires-python = ">=3.10"
+dependencies = ["pydantic>=2"]
+
+[build-system]
+requires = ["maturin>=1.10,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+python-source = "python"
+module-name = "baml_native._native"
