@@ -6,16 +6,20 @@ one loop and one thread at a time, and every handle freed. Run against the
 native bindings only (PYTHONPATH=.../native).
 """
 
+import _thread
 import asyncio
+import gc
 import os
 import threading
+import time
+import warnings
 
 import pytest
 
 import baml_sdk
 import baml_native
 from baml_native import _native
-from baml_bridge.errors import BamlError
+from baml_bridge.errors import BamlError, BamlPanic
 
 from baml_sdk.bridge_test import (
     LookupFailed,
@@ -36,6 +40,7 @@ from baml_sdk.bridge_test import (
     nap_sync,
     round_trip_points,
 )
+from baml_sdk.bridge_test import divide, fail_later, quit, stuck
 from baml_sdk.complex_models import round_trip_complex_profile
 
 if "native" not in os.path.dirname(baml_sdk.__file__).split(os.sep):
@@ -192,7 +197,7 @@ def test_arguments_of_the_wrong_type_are_refused():
         add_sync("1", 2)
     with pytest.raises(TypeError, match="does not fit"):
         add_sync(True, 2)  # bool is checked before int
-    with pytest.raises(TypeError, match="missing required argument"):
+    with pytest.raises(BamlError, match="Invalid argument: b"):
         add_sync(1)
     with pytest.raises(TypeError, match="unexpected keyword"):
         add_sync(1, 2, c=3)
@@ -294,4 +299,273 @@ async def test_every_way_of_making_models_gives_equal_results(mode):
         assert back.model_fields_set == profile().model_fields_set
         assert back.model_dump() == profile().model_dump()
     finally:
-        baml_native.set_model_mode("native")
+        baml_native.set_model_mode(os.environ.get("BAML_NATIVE_MODEL_MODE", "native"))
+
+
+# ---- after the review ----
+
+
+def wait_until(condition, seconds=2.0):
+    """Turn the library (with sync calls) until `condition` holds."""
+    deadline = time.monotonic() + seconds
+    while not condition() and time.monotonic() < deadline:
+        add_sync(0, 0)
+        time.sleep(0.005)
+    return condition()
+
+
+def test_a_panic_while_starting_leaves_the_module_usable():
+    baml_native.panic_next("start")
+    with pytest.raises(BaseException) as raised:  # pyo3's PanicException
+        add_sync(1, 2)
+    assert "panic" in type(raised.value).__name__.lower() or "panic" in str(raised.value)
+    # The lock it poisoned is taken back.
+    assert add_sync(1, 2) == 3
+    assert baml_native.handle_count() >= 0
+
+
+async def test_a_panic_while_delivering_one_result_spares_the_others():
+    before = baml_native.handle_count()
+    first = asyncio.ensure_future(nap(20))
+    second = asyncio.ensure_future(nap(20))
+    await asyncio.sleep(0)  # both started, both wait on the loop
+    baml_native.panic_next("event")
+    results = await asyncio.gather(first, second, return_exceptions=True)
+    failed = [r for r in results if isinstance(r, BaseException)]
+    assert len(failed) == 1 and "panicked" in str(failed[0])
+    assert [r for r in results if not isinstance(r, BaseException)] == [20]
+    assert baml_native.calls_in_flight() == 0
+    assert baml_native.handle_count() == before
+    assert await add(2, 2) == 4
+
+
+async def test_a_dict_argument_is_read_from_a_snapshot():
+    # A map argument walked from `items()`: changing the dict while it is
+    # read cannot crash the walk. (Nothing in this walk runs Python code, so
+    # the change is made before; the snapshot is what makes it safe.)
+    from baml_sdk.maps import round_trip_simple_map
+
+    m = {str(i): i for i in range(100)}
+    assert await round_trip_simple_map(m) == m
+
+
+def test_ctrl_c_in_a_sync_call_loses_no_wake():
+    timer = threading.Timer(0.1, _thread.interrupt_main)
+    timer.start()
+    started = time.monotonic()
+    with pytest.raises(KeyboardInterrupt):
+        nap_sync(5000)
+    # The wait looks for signals in slices, not only at the BAML timer.
+    assert time.monotonic() - started < 1.0
+
+    async def after():
+        # Calls that wait on the I/O thread still wake the loop.
+        for _ in range(5):
+            assert await asyncio.wait_for(env_or("NO_SUCH_VAR_X", "fb"), 2) == "fb"
+            assert await asyncio.wait_for(nap(5), 2) == 5
+
+    asyncio.run(after())
+    assert wait_until(lambda: baml_native.calls_in_flight() == 0, 7.0)
+
+
+def test_one_future_that_cannot_take_its_result_stops_nothing():
+    # The review's case: a future of a closed loop.
+    event_loop = asyncio.new_event_loop()
+    task = event_loop.create_task(nap(100))
+    event_loop.run_until_complete(asyncio.sleep(0.01))
+    event_loop.close()
+    assert nap_sync(200) == 200
+    del task
+
+
+async def test_a_task_that_sleeps_after_its_call_returned_still_runs():
+    seen = []
+    previous = baml_native.set_unhandled_spawn_error_handler(
+        lambda error, cancelled: seen.append(error)
+    )
+    try:
+        # The call returns at once; its task sleeps 30 ms on a BAML timer,
+        # which becomes a timer of this loop, then fails.
+        assert await fail_later(30) == 1
+        for _ in range(100):
+            if seen:
+                break
+            await asyncio.sleep(0.01)
+    finally:
+        baml_native.set_unhandled_spawn_error_handler(previous)
+    assert len(seen) == 1 and seen[0].value == "exploded"
+
+
+async def test_a_result_delivered_by_a_nested_turn_reaches_its_call():
+    seen = []
+
+    def handler(error, cancelled):
+        # A sync call from the handler: its turns deliver the nap below.
+        seen.append(nap_sync(30))
+
+    previous = baml_native.set_unhandled_spawn_error_handler(handler)
+    try:
+        assert await fail_later(10) == 1
+        time.sleep(0.03)  # the task's timer is due; no turn has run it
+        # This call's first turn runs the failing task; the handler's sync
+        # call then sees this nap end.
+        assert await asyncio.wait_for(nap(5), 2) == 5
+    finally:
+        baml_native.set_unhandled_spawn_error_handler(previous)
+    assert seen == [30]
+    assert baml_native.calls_in_flight() == 0
+
+
+def test_moving_to_a_new_loop_when_the_old_was_closed_with_tasks_pending():
+    first = asyncio.new_event_loop()
+    task = first.create_task(nap(100))
+    first.run_until_complete(asyncio.sleep(0.01))
+    first.close()  # the task is still pending
+    second = asyncio.new_event_loop()
+    try:
+        assert second.run_until_complete(nap(5)) == 5
+        # The old call's result is freed when it arrives.
+        second.run_until_complete(asyncio.sleep(0.15))
+        assert baml_native.calls_in_flight() == 0
+    finally:
+        second.close()
+    del task
+
+
+async def test_throwing_another_exception_into_a_waiting_call():
+    call = nap(50)
+    assert isinstance(call.send(None), asyncio.Future)
+    with pytest.raises(ValueError, match="thrown in"):
+        call.throw(ValueError("thrown in"))
+    for _ in range(100):
+        if baml_native.calls_in_flight() == 0:
+            break
+        await asyncio.sleep(0.01)
+    assert baml_native.calls_in_flight() == 0
+
+
+async def test_a_panic_from_python():
+    with pytest.raises(BamlPanic) as raised:
+        await divide(1, 0)
+    assert "DivisionByZero" in (raised.value.class_name or ""), raised.value.class_name
+    assert await divide(6, 3) == 2
+
+
+async def test_an_exit_from_python_is_a_panic_not_the_end_of_the_process():
+    with pytest.raises(BamlPanic) as raised:
+        await quit(3)
+    assert "Exit" in (raised.value.class_name or ""), raised.value.class_name
+    assert await add(1, 1) == 2
+
+
+async def test_a_stuck_call_from_python():
+    with pytest.raises(BamlPanic) as raised:
+        await stuck()
+    assert raised.value.class_name == "baml.panics.Stuck"
+
+
+def test_a_call_never_awaited_warns():
+    with pytest.warns(RuntimeWarning, match="never awaited"):
+        add(1, 2)
+        gc.collect()
+
+
+def test_a_call_in_a_reference_cycle_is_collected():
+    def calls():
+        return [o for o in gc.get_objects() if type(o) is _native.Call]
+
+    gc.collect()
+    before = len(calls())
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        items = []
+        call = count_ints(items)
+        items.append(call)  # the call's arguments hold the call
+        del call, items
+        gc.collect()
+    assert len(calls()) == before
+
+
+def test_models_the_native_construct_would_build_wrong_are_validated():
+    import pydantic
+
+    class Plain(pydantic.BaseModel):
+        x: int
+
+    class Extra(pydantic.BaseModel):
+        model_config = pydantic.ConfigDict(extra="allow")
+        x: int
+
+    class Private(pydantic.BaseModel):
+        x: int
+        _seen: int = pydantic.PrivateAttr(default=7)
+
+    class Validated(pydantic.BaseModel):
+        x: int
+
+        @pydantic.field_validator("x")
+        @classmethod
+        def double(cls, value):
+            return value * 2
+
+    class PostInit(pydantic.BaseModel):
+        x: int
+
+        def model_post_init(self, context):
+            self.__dict__["y"] = self.x + 1
+
+    model, validates = baml_native.build_model(Plain, {"x": 1})
+    assert not validates and model == Plain(x=1)
+    for cls in (Extra, Private, Validated, PostInit):
+        model, validates = baml_native.build_model(cls, {"x": 1})
+        assert validates, cls
+        expected = cls.model_validate({"x": 1})
+        assert model == expected and model.__dict__ == expected.__dict__, cls
+        assert model.__pydantic_private__ == expected.__pydantic_private__, cls
+
+
+def test_two_threads_loading_at_once_share_the_wake_the_library_uses():
+    import subprocess
+    import sys
+    import textwrap
+
+    script = textwrap.dedent(
+        """
+        import asyncio, sys, threading
+        import baml_native
+        from baml_native import _native
+        path, interface_hash = sys.argv[1], int(sys.argv[2], 16)
+        start = threading.Barrier(2)
+        done = threading.Barrier(2)
+        results = []
+
+        def worker():
+            start.wait()
+            baml_native.load(path, interface_hash)
+            done.wait()
+            try:
+                env_or = _native.function("bridge_test.env_or", False, ["name", "fallback"], {})
+                # Parks on the I/O thread: only a wake through the socket the
+                # loop watches finishes it.
+                results.append(asyncio.run(asyncio.wait_for(env_or("NO_SUCH_VAR_X", "fb"), 5)))
+            except RuntimeError as error:
+                results.append("refused" if "thread" in str(error) else repr(error))
+            except Exception as error:
+                results.append(repr(error))
+
+        threads = [threading.Thread(target=worker) for _ in range(2)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+        print(sorted(results))
+        """
+    )
+    from baml_sdk import _native_library
+
+    out = subprocess.run(
+        [sys.executable, "-c", script, _native_library.PATH, f"{_native_library.INTERFACE_HASH:x}"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "['fb', 'refused']", out.stdout + out.stderr

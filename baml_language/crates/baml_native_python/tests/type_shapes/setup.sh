@@ -3,8 +3,8 @@
 # under target/native_python/:
 #
 #   libtype_shapes.dylib  the type-shapes fixture plus `bridge_test`
-#                         (crates/baml_native_host/tests/type_shapes/bridge_test.baml),
-#                         every function that packs
+#                         (this directory's bridge_test.baml), every function
+#                         that packs
 #   vm/baml_sdk           today's generated package for the same sources
 #   native/baml_sdk       the same package over the native library: the lines
 #                         listed below are the only ones that change
@@ -21,7 +21,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"   # baml_language
 WORK="$ROOT/target/native_python"
 FIXTURE="$ROOT/sdk_tests/fixtures/type_shapes/baml_src"
-BRIDGE_TEST="$ROOT/crates/baml_native_host/tests/type_shapes/bridge_test.baml"
+# The host crate's `bridge_test` plus the functions the Python tests add
+# (the first part is a copy of baml_native_host/tests/type_shapes/bridge_test.baml).
+BRIDGE_TEST="$HERE/bridge_test.baml"
 GENERATED="$ROOT/sdk_tests/crates/python_pydantic2/type_shapes/generated"
 CUSTOMIZABLE="$ROOT/sdk_tests/crates/python_pydantic2/type_shapes/customizable"
 mkdir -p "$WORK"
@@ -114,7 +116,7 @@ step "venv"
 if [[ ! -x "$WORK/venv/bin/python" ]]; then
   uv venv --python 3.13 "$WORK/venv"
   VIRTUAL_ENV="$WORK/venv" uv pip install "pydantic>=2" "protobuf>=6.31.1" \
-    "typing-extensions>=4.14.0" pytest pytest-asyncio
+    "typing-extensions>=4.14.0" pytest pytest-asyncio pytest-timeout
 fi
 (cd "$ROOT/sdks/python" && VIRTUAL_ENV="$WORK/venv" maturin develop --release --uv)
 (cd "$ROOT/crates/baml_native_python" && VIRTUAL_ENV="$WORK/venv" maturin develop --release --uv)

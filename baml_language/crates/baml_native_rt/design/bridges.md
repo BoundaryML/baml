@@ -254,19 +254,20 @@ The crate `baml_native_python` is a pyo3 module, `baml_native._native`, built on
 |---|---|
 | `load(path, hash)` | `Library::load`, then a plan for each type of `Library::interface()`, the interface as a typed tree. The thread that loads the library is the only one that may call it |
 | `set_type_map(tm)` | The generated type map. A class or enum finds its Python class through it the first time it is used. Fields are matched to pydantic attributes by alias, then name |
-| `define_function(fqn, mode, ...)` | Today's signature. Async gives a coroutine object, sync a blocking call. A function the packer refused still imports, and raises `NotImplementedError` |
-| Results | One native call per result: a walk over the core's reads that builds `int`, `str`, `list`, `dict`, enum members and models directly. A union picks its member by tag, by `class_of`, or by the first element |
-| Arguments | Built by the parameter's declared type. `bool` is checked before `int`. An `int` given for a `float` is widened, as today's SDK does. An empty list where two list types fit is a `TypeError`, as today's |
+| `define_function(fqn, mode, ...)` | Today's signature. Async gives a coroutine object, whose arguments are read when it is first awaited, as an `async def` reads them; never awaited, it warns as a coroutine does. Sync gives a blocking call. A function not in the library's interface still imports, and raises `NotImplementedError`. It does not bind `self`: methods installed on a class are not supported (none packs today) |
+| Results | One native call per result: a walk over the core's reads that builds `int`, `str`, `list`, `dict`, enum members and models directly. A union picks its member by tag when one member alone has it, otherwise by `class_of` or by every element of a list or map. A model that allows extra fields, or has private attributes, validators or a `model_post_init`, is made with `model_validate` |
+| Arguments | Built by the parameter's declared type, by today's encoder's rules (`bridge_encode`, Python): `bool` is not an `int`; an `int` fits a `float` only when exact; an enum member is a variant of its own enum only, told apart before the `str` it mixes in; a `str` names a variant; a `dict` whose keys are fields stands in for a class (a missing field is null where null is allowed). Under a union: rank by shape (identity, natural, conversion), then one type, then the value's own type, then fewest omitted fields, else `TypeError` ("fits more than one"). A `dict` argument is walked from a snapshot of its items |
 | Errors | Today's classes, from `baml_bridge.errors`. A throw becomes `BamlError(value, class_name="user.<class>")`, typed when the declared throws type fits. A panic becomes `BamlPanic`. A refusal becomes `TypeError` with the library's reason |
 | `set_unhandled_spawn_error_handler` | Today's contract and default (print, then exit). It is called after the turn that found the failure, with nothing held |
 
 How it joins asyncio:
 
 - The library's `wake` comes from its I/O thread, without the GIL. It sets a flag and writes one byte to a socket pair, as today's bridge does. The loop watches the socket (`add_reader`), and a turn runs on the loop's thread. The flag is cleared before a turn, so a wake that comes during one asks for another.
-- A BAML timer becomes a `call_later` timer, taken from what a turn returns.
+- A BAML timer becomes a `call_later` timer of the joined loop, armed from every turn that returns one, so a task spawned by a call that already returned still runs when it sleeps. A call that ends in its first turn and leaves a timer set joins the running loop for it. With no loop at all (sync calls only), such tasks advance during later calls; a returned call's task that waits only on I/O, with no timer, advances when a loop is joined or at the next call.
 - An async call is a coroutine object (`__await__`, `send`, `throw`, `close`), so `await`, `asyncio.run`, `create_task`, `gather` and `wait_for` take it. Its first step starts the call and runs a turn. A call that ends in that turn returns there, with no future and no trip around the loop. Otherwise it waits on a future of the joined loop.
 - Cancelling the awaiting task does not stop the BAML call: its result is freed unread when it arrives.
-- A sync call turns until its call ends. Between turns it waits for `wake` or the next timer with the GIL released, and it delivers the results of other calls that end meanwhile.
+- A sync call turns until its call ends. Between turns it waits for `wake` or the next timer with the GIL released, in slices of 50 ms that look for signals, so Ctrl-C ends it; the call is then abandoned, and no wake is lost. It delivers the results of other calls that end meanwhile. A call's result belongs to its call id from the start, whichever turn delivers it (a sync call made from the unhandled-error handler, say).
+- A panic while a result is built becomes that call's exception; the other results of the turn are still delivered and every handle is freed. A future that cannot take its result (cancelled meanwhile, or of a closed loop) stops nothing else.
 - One loop at a time. A call that must wait on another loop moves the reader there when the old loop is closed or has nothing in flight. Otherwise it is a `RuntimeError`. A call from another thread is a `RuntimeError`, as is a call made from Python code run while a result is being built. Neither is ever a hang.
 - The GIL is released while BAML runs in a turn, and taken again for each result copied.
 
@@ -276,8 +277,9 @@ What differs from today's SDK:
 - A stuck call raises `BamlPanic` with `baml.panics.Stuck`. Today's VM has no such error: such a call never ends.
 - Arguments may nest 200 levels; the protobuf wire allowed 32.
 - No `_baml=` options, cancellation of the BAML call, streams, or generics.
+- Argument rules are today's, and checked against today's SDK by the same tests (`test_arguments.py` runs against both). Argument errors come at `await`, as today: a missing argument is `BamlError` with `baml.errors.InvalidArgument`, too many positional arguments a `TypeError`.
 
-The bindings are today's generated package for the type-shapes fixture plus `bridge_test`, with 81 lines changed, all of them imports or the init call. `tests/type_shapes/setup.sh` makes them and lists them. Today's 136 tests for the fixture run against them unchanged: 80 pass and 56 are skipped. 50 of the skips call a function the packer refuses. 6 need standard-library handles (4), media (1), or the wire's 32-level limit (1). The crate's own 24 tests pass too, and all of it passes again under `BAML_GC_STRESS=1`.
+The bindings are today's generated package for the type-shapes fixture plus `bridge_test`, with 81 lines changed, all of them imports or the init call. `tests/type_shapes/setup.sh` makes them and lists them. Today's 136 tests for the fixture run against them unchanged: 79 pass and 57 are skipped. 51 of the skips are tests that call a function not in the library's interface, whatever they catch. 6 need standard-library handles (4), media (1), or the wire's 32-level limit (1). The crate's own 50 tests pass too (10 of them run against today's SDK as well, with the same answers). All of it passes again under `BAML_GC_STRESS=1`, and with models made by `model_validate`.
 
 On Apple M5 Max, Python 3.13, through `perfq --bench` (#1170, #1172 to #1177). Each number is the median of 3 or 5 interleaved rounds, each round the median of 3 runs. Outside load was 0.33 to 0.48 cores. "Today's" is the generated Python SDK of the same sources over the VM (`baml_bridge`, release). Native models are made by the native construct (below), and the GIL is released.
 
@@ -295,6 +297,8 @@ On Apple M5 Max, Python 3.13, through `perfq --bench` (#1170, #1172 to #1177). E
 | `Point[]` of 10,000 in | 5,316 ns, 136,673 | 97 ns, 1,682 | 37 ns |
 
 Instructions come from running each case at n and 2n. For the "in" rows they are net of building the argument, which the pure-Python run does too.
+
+After the review's fixes (#1237 to #1245) the Mac's outside load was 0.74 to 1.17 cores, too much to quote times. Instruction counts, which do not depend on it, are within about 1% of the table above (profile 467,007 sync, `Point[]` in 13,074 gross). The times agree with it too, and so do their ratios to today's SDK, which each job measures interleaved: sync `round_trip_int` 209 ns, inner 638 ns, profile 19.2 µs, `Point[]` in 98 ns.
 
 How a model is made decides most of what is left. Today's SDK validates, so the table below shows like for like: the native bridge making models three ways, beside pure Python building the same objects each way with no bridge (#1172, #1175, #1177, sync).
 

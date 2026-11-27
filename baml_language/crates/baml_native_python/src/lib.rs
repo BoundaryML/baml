@@ -29,11 +29,13 @@ mod plan;
 
 use std::{
     collections::HashMap,
+    ffi::CString,
     io::{Read, Write},
     os::{fd::AsRawFd, unix::net::UnixStream},
+    panic::{AssertUnwindSafe, catch_unwind},
     sync::{
-        Condvar, Mutex, MutexGuard, PoisonError,
-        atomic::{AtomicBool, Ordering},
+        Condvar, Mutex, MutexGuard, OnceLock, PoisonError, TryLockError,
+        atomic::{AtomicBool, AtomicU8, Ordering},
     },
     thread::ThreadId,
     time::{Duration, Instant},
@@ -42,7 +44,10 @@ use std::{
 use baml_native_host::{BamlValue, Event, Library, Outcome, Type, tag};
 use plan::{ModelMode, Plans};
 use pyo3::{
-    exceptions::{PyNotImplementedError, PyRuntimeError, PyStopIteration, PyTypeError},
+    PyTraverseError, PyVisit,
+    exceptions::{
+        PyNotImplementedError, PyRuntimeError, PyRuntimeWarning, PyStopIteration, PyTypeError,
+    },
     intern,
     prelude::*,
     sync::PyOnceLock,
@@ -67,6 +72,34 @@ static RUNTIME: PyOnceLock<Runtime> = PyOnceLock::new();
 /// on a long one, and holding it would stop every other Python thread for
 /// the whole of a long BAML computation.
 static RELEASE_GIL: AtomicBool = AtomicBool::new(true);
+/// The one socket pair and flag the library wakes, made by the first
+/// `load`, whichever thread wins.
+static WAKE: OnceLock<&'static Wake> = OnceLock::new();
+/// For tests: where the next deliberate panic happens (1: delivering an
+/// event, 2: starting a call).
+static TEST_PANIC: AtomicU8 = AtomicU8::new(0);
+
+fn test_panic(at: u8) {
+    if TEST_PANIC
+        .compare_exchange(at, 0, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        panic!("a panic asked for by a test");
+    }
+}
+
+/// A panic caught while a result was built, as the exception its caller
+/// gets.
+fn panicked(payload: &(dyn std::any::Any + Send)) -> PyErr {
+    let message = payload
+        .downcast_ref::<&str>()
+        .map(ToString::to_string)
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_default();
+    PyRuntimeError::new_err(format!(
+        "the native bridge panicked while building this call's result: {message}"
+    ))
+}
 
 /// What the library's `wake` reaches, from any thread.
 struct Wake {
@@ -91,6 +124,34 @@ impl Wake {
     fn drain(&self) {
         let mut bytes = [0_u8; 64];
         while matches!((&self.reader).read(&mut bytes), Ok(n) if n > 0) {}
+    }
+
+    /// Keep the rule that a set flag has a byte in the socket, after the
+    /// socket was drained by a turn that did not run.
+    fn rearm(&self) {
+        if self.owed.load(Ordering::Acquire) {
+            let _ = (&self.writer).write(&[1]);
+        }
+    }
+
+    /// Wait, with the GIL released by the caller, until a wake or `until`.
+    /// Whether a wake came.
+    fn wait_until(&self, until: Instant) -> bool {
+        let mut guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
+        loop {
+            if self.owed.load(Ordering::Acquire) {
+                return true;
+            }
+            let now = Instant::now();
+            if now >= until {
+                return false;
+            }
+            guard = self
+                .changed
+                .wait_timeout(guard, until - now)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+        }
     }
 }
 
@@ -119,6 +180,10 @@ struct Joined {
 #[derive(Default)]
 struct Inner {
     calls: HashMap<u64, Entry>,
+    /// Results of calls that ended in a turn their own caller did not run
+    /// (a sync call made from the unhandled-error handler, say): kept for
+    /// their caller by call id.
+    finished: HashMap<u64, PyResult<Py<PyAny>>>,
     /// How many of `calls` wait on a future of the joined loop.
     on_loop: usize,
     joined: Option<Joined>,
@@ -162,29 +227,44 @@ struct Turned {
 }
 
 impl Runtime {
+    /// The calls' state. On the owner thread a held lock means re-entry,
+    /// refused; a lock poisoned by a panic is taken back, since every change
+    /// to the state leaves it whole.
     fn inner(&self) -> PyResult<MutexGuard<'_, Inner>> {
-        self.inner.try_lock().map_err(|_| {
-            PyRuntimeError::new_err(
+        match self.inner.try_lock() {
+            Ok(guard) => Ok(guard),
+            Err(TryLockError::Poisoned(poisoned)) => {
+                self.inner.clear_poison();
+                Ok(poisoned.into_inner())
+            }
+            Err(TryLockError::WouldBlock) => Err(PyRuntimeError::new_err(
                 "a BAML call was made while the library was busy on this thread (from code run \
                  while a result was being built): it would never end",
-            )
-        })
+            )),
+        }
     }
 
     /// Give the library a turn and deliver what ended: `mine` to the
     /// caller, the rest to their futures, unhandled failures to the hook.
     fn turn(&'static self, py: Python<'_>, mine: Option<u64>) -> PyResult<Turned> {
-        self.wake.owed.store(false, Ordering::Release);
         let mut inner = self.inner()?;
+        // Cleared before the turn, so a wake that comes during it asks for
+        // another.
+        self.wake.owed.store(false, Ordering::Release);
         let mut taken = None;
         let mut resolved: Vec<(Py<PyAny>, PyResult<Py<PyAny>>)> = Vec::new();
         let mut unhandled: Vec<PyResult<Py<PyAny>>> = Vec::new();
         let Inner {
             calls,
+            finished,
             on_loop,
             joined,
         } = &mut *inner;
         let plans = &self.plans;
+        // Each event is handled under its own catch: a panic while one
+        // result is built becomes that call's exception, and the events
+        // after it are still delivered. The value is dropped either way, so
+        // its handle is freed.
         let mut on_event = |py: Python<'_>, event: Event<'_>| match event {
             Event::Ended {
                 call,
@@ -197,25 +277,40 @@ impl Runtime {
                 if matches!(entry.waiter, Waiter::Future(_)) {
                     *on_loop -= 1;
                 }
+                let export = entry.export;
+                let convert = || {
+                    catch_unwind(AssertUnwindSafe(|| {
+                        test_panic(1);
+                        ended(py, plans, export, outcome, &value)
+                    }))
+                    .unwrap_or_else(|payload| Err(panicked(payload.as_ref())))
+                };
                 match entry.waiter {
+                    // The result belongs to its call, whichever turn
+                    // delivers it.
                     Waiter::Turning => {
+                        let result = convert();
                         if Some(call) == mine {
-                            taken = Some(ended(py, plans, entry.export, outcome, &value));
+                            taken = Some(result);
+                        } else {
+                            finished.insert(call, result);
                         }
                     }
                     Waiter::Future(future) => {
                         // A cancelled caller stopped waiting: its result is
                         // freed unread.
                         if !is_done(py, &future) {
-                            let result = ended(py, plans, entry.export, outcome, &value);
-                            resolved.push((future, result));
+                            resolved.push((future, convert()));
                         }
                     }
                     Waiter::Abandoned => {}
                 }
             }
             Event::Unhandled { error, .. } => {
-                unhandled.push(thrown_error(py, plans, None, &error));
+                unhandled.push(
+                    catch_unwind(AssertUnwindSafe(|| thrown_error(py, plans, None, &error)))
+                        .unwrap_or_else(|payload| Err(panicked(payload.as_ref()))),
+                );
             }
         };
         let library = self.library;
@@ -228,30 +323,44 @@ impl Runtime {
             let session = library.session();
             session.turn(|event| on_event(py, event))
         };
-        // A loop timer only matters to calls that wait on the loop.
-        if *on_loop > 0
-            && let Some(joined) = joined
-        {
+        // Whenever a loop is known: tasks of calls that already returned
+        // may sleep, and must still run.
+        if let Some(joined) = joined {
             arm(py, joined, next);
         }
         drop(inner);
+        // One future that cannot take its result (cancelled meanwhile, or of
+        // a loop that was closed) stops nothing else.
         for (future, result) in resolved {
             let future = future.bind(py);
-            match result {
-                Ok(value) => future.call_method1(intern!(py, "set_result"), (value,))?,
+            let delivered = match result {
+                Ok(value) => future.call_method1(intern!(py, "set_result"), (value,)),
                 Err(error) => {
-                    future.call_method1(intern!(py, "set_exception"), (error.into_value(py),))?
+                    future.call_method1(intern!(py, "set_exception"), (error.into_value(py),))
                 }
             };
-        }
-        for error in unhandled {
-            let error = match error {
-                Ok(error) => error,
-                Err(error) => error.into_value(py).into_any(),
-            };
-            if let Err(error) = hooks(py)?.report_unhandled.bind(py).call1((error,)) {
-                error.write_unraisable(py, None);
+            if let Err(error) = delivered
+                && !quiet(py, future)
+            {
+                error.write_unraisable(py, Some(future));
             }
+        }
+        if let Ok(hooks) = hooks(py) {
+            for error in unhandled {
+                let error = match error {
+                    Ok(error) => error,
+                    Err(error) => error.into_value(py).into_any(),
+                };
+                if let Err(error) = hooks.report_unhandled.bind(py).call1((error,)) {
+                    error.write_unraisable(py, None);
+                }
+            }
+        }
+        // The handler may have made a sync call whose turns delivered ours.
+        if taken.is_none()
+            && let Some(id) = mine
+        {
+            taken = self.inner()?.finished.remove(&id);
         }
         Ok(Turned { mine: taken, next })
     }
@@ -265,6 +374,7 @@ impl Runtime {
         args: &[Option<Py<PyAny>>],
     ) -> PyResult<u64> {
         let mut inner = self.inner()?;
+        test_panic(2);
         let function = &self.plans.interface().functions[export as usize];
         let session = self.library.session();
         let mut values: Vec<BamlValue<'_>> = Vec::with_capacity(args.len());
@@ -288,8 +398,76 @@ impl Runtime {
                 waiter: Waiter::Turning,
             },
         );
-        self.wake.owed.store(true, Ordering::Release);
         Ok(id)
+    }
+
+    /// Make `event_loop` the joined one: the loop that watches the wake
+    /// socket and holds the BAML timer. `false` when another loop has calls
+    /// in flight, which keeps it.
+    fn join(
+        &'static self,
+        py: Python<'_>,
+        inner: &mut Inner,
+        event_loop: &Bound<'_, PyAny>,
+    ) -> PyResult<bool> {
+        if inner
+            .joined
+            .as_ref()
+            .is_some_and(|joined| joined.event_loop.bind(py).is(event_loop))
+        {
+            return Ok(true);
+        }
+        if let Some(old) = inner.joined.take() {
+            let old_loop = old.event_loop.bind(py);
+            let closed = old_loop
+                .call_method0(intern!(py, "is_closed"))?
+                .is_truthy()?;
+            let in_flight = inner.calls.values().any(|entry| match &entry.waiter {
+                Waiter::Future(future) => !is_done(py, future),
+                Waiter::Turning | Waiter::Abandoned => false,
+            });
+            if !closed && in_flight {
+                inner.joined = Some(old);
+                return Ok(false);
+            }
+            if !closed {
+                let _ = old_loop.call_method1(
+                    intern!(py, "remove_reader"),
+                    (self.wake.reader.as_raw_fd(),),
+                );
+            }
+            if let Some((_, handle)) = old.timer {
+                let _ = handle.bind(py).call_method0(intern!(py, "cancel"));
+            }
+            // Calls waiting on the old loop's futures cannot be delivered.
+            for entry in inner.calls.values_mut() {
+                if matches!(entry.waiter, Waiter::Future(_)) {
+                    entry.waiter = Waiter::Abandoned;
+                }
+            }
+            inner.on_loop = 0;
+        }
+        watch(py, event_loop, self.wake.reader.as_raw_fd())?;
+        inner.joined = Some(Joined {
+            event_loop: event_loop.clone().unbind(),
+            timer: None,
+        });
+        Ok(true)
+    }
+
+    /// A call that ended in its first turn left a BAML timer set (a task it
+    /// spawned sleeps): join the running loop, when there is one and it can
+    /// be joined, so the timer fires there.
+    fn keep_timer(&'static self, py: Python<'_>, next: Duration) {
+        let Ok(event_loop) = running_loop(py) else {
+            return;
+        };
+        let Ok(mut inner) = self.inner() else { return };
+        if self.join(py, &mut inner, &event_loop).unwrap_or(false)
+            && let Some(joined) = &mut inner.joined
+        {
+            arm(py, joined, Some(next));
+        }
     }
 
     /// Make the running loop the joined one, and a future on it for call
@@ -300,56 +478,15 @@ impl Runtime {
         id: u64,
         next: Option<Duration>,
     ) -> PyResult<Py<PyAny>> {
-        static GET_RUNNING_LOOP: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        let event_loop = GET_RUNNING_LOOP
-            .import(py, "asyncio", "get_running_loop")?
-            .call0()?;
+        let event_loop = running_loop(py)?;
         let mut inner = self.inner()?;
-        let same = inner
-            .joined
-            .as_ref()
-            .is_some_and(|joined| joined.event_loop.bind(py).is(&event_loop));
-        if !same {
-            if let Some(old) = inner.joined.take() {
-                let old_loop = old.event_loop.bind(py);
-                let closed = old_loop
-                    .call_method0(intern!(py, "is_closed"))?
-                    .is_truthy()?;
-                let in_flight = inner.calls.values().any(|entry| match &entry.waiter {
-                    Waiter::Future(future) => !is_done(py, future),
-                    Waiter::Turning | Waiter::Abandoned => false,
-                });
-                if !closed && in_flight {
-                    inner.joined = Some(old);
-                    drop(inner);
-                    self.abandon(py, id);
-                    return Err(PyRuntimeError::new_err(
-                        "the BAML library is joined to another event loop that has calls in \
-                         flight; one loop at a time",
-                    ));
-                }
-                if !closed {
-                    let _ = old_loop.call_method1(
-                        intern!(py, "remove_reader"),
-                        (self.wake.reader.as_raw_fd(),),
-                    );
-                }
-                if let Some((_, handle)) = old.timer {
-                    let _ = handle.bind(py).call_method0(intern!(py, "cancel"));
-                }
-                // Calls waiting on the old loop's futures cannot be delivered.
-                for entry in inner.calls.values_mut() {
-                    if matches!(entry.waiter, Waiter::Future(_)) {
-                        entry.waiter = Waiter::Abandoned;
-                    }
-                }
-                inner.on_loop = 0;
-            }
-            watch(py, &event_loop, self.wake.reader.as_raw_fd())?;
-            inner.joined = Some(Joined {
-                event_loop: event_loop.clone().unbind(),
-                timer: None,
-            });
+        if !self.join(py, &mut inner, &event_loop)? {
+            drop(inner);
+            self.abandon(py, id);
+            return Err(PyRuntimeError::new_err(
+                "the BAML library is joined to another event loop that has calls in flight; one \
+                 loop at a time",
+            ));
         }
         let future = event_loop
             .call_method0(intern!(py, "create_future"))?
@@ -363,8 +500,7 @@ impl Runtime {
         }
         drop(inner);
         // A wake that came before the reader was watched left its byte in
-        // the socket, which the loop sees; a turn owed by a start is given
-        // now.
+        // the socket, which the loop sees; a turn owed is given now.
         if self.wake.owed.load(Ordering::Acquire) {
             event_loop.call_method1(intern!(py, "call_soon"), (Py::new(py, Turn)?,))?;
         }
@@ -373,9 +509,9 @@ impl Runtime {
 
     /// Forget call `id`: its result is freed when it arrives.
     fn abandon(&self, py: Python<'_>, id: u64) {
-        if let Ok(mut inner) = self.inner.try_lock()
-            && let Some(entry) = inner.calls.get_mut(&id)
-        {
+        let Ok(mut inner) = self.inner() else { return };
+        inner.finished.remove(&id);
+        if let Some(entry) = inner.calls.get_mut(&id) {
             let was_on_loop = if let Waiter::Future(future) = &entry.waiter {
                 let _ = future.bind(py).call_method0(intern!(py, "cancel"));
                 true
@@ -389,7 +525,8 @@ impl Runtime {
         }
     }
 
-    /// A sync call: start it and turn until it ends.
+    /// A sync call: start it and turn until it ends. A call left early
+    /// (Ctrl-C) is abandoned: its result is freed when it arrives.
     fn call_sync(
         &'static self,
         py: Python<'_>,
@@ -397,6 +534,16 @@ impl Runtime {
         args: &[Option<Py<PyAny>>],
     ) -> PyResult<Py<PyAny>> {
         let id = self.start(py, export, args)?;
+        let result = self.drive_sync(py, id);
+        if result.is_err() {
+            self.abandon(py, id);
+        }
+        result
+    }
+
+    fn drive_sync(&'static self, py: Python<'_>, id: u64) -> PyResult<Py<PyAny>> {
+        /// How often a wait with no BAML timer looks for signals.
+        const SLICE: Duration = Duration::from_millis(50);
         loop {
             let turned = self.turn(py, Some(id))?;
             if let Some(result) = turned.mine {
@@ -407,34 +554,40 @@ impl Runtime {
             }
             let deadline = turned.next.map(|next| Instant::now() + next);
             let wake = self.wake;
-            py.detach(|| {
-                let mut guard = wake.lock.lock().unwrap_or_else(PoisonError::into_inner);
-                while !wake.owed.load(Ordering::Acquire) {
-                    match deadline {
-                        Some(deadline) => {
-                            let now = Instant::now();
-                            if now >= deadline {
-                                break;
-                            }
-                            guard = wake
-                                .changed
-                                .wait_timeout(guard, deadline - now)
-                                .unwrap_or_else(PoisonError::into_inner)
-                                .0;
-                        }
-                        None => {
-                            guard = wake
-                                .changed
-                                .wait(guard)
-                                .unwrap_or_else(PoisonError::into_inner);
-                        }
-                    }
+            // The socket is left to the loop's reader: a set flag always has
+            // its byte there, so an early return loses no wake.
+            loop {
+                let slice = Instant::now() + SLICE;
+                let until = deadline.map_or(slice, |deadline| deadline.min(slice));
+                let woken = py.detach(|| wake.wait_until(until));
+                if woken || deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                    break;
                 }
-            });
-            self.wake.drain();
-            py.check_signals()?;
+                py.check_signals()?;
+            }
         }
     }
+}
+
+/// Whether a failure to deliver to `future` is expected: it is done, or its
+/// loop was closed.
+fn quiet(py: Python<'_>, future: &Bound<'_, PyAny>) -> bool {
+    future
+        .call_method0(intern!(py, "done"))
+        .and_then(|done| done.is_truthy())
+        .unwrap_or(true)
+        || future
+            .call_method0(intern!(py, "get_loop"))
+            .and_then(|event_loop| event_loop.call_method0(intern!(py, "is_closed")))
+            .and_then(|closed| closed.is_truthy())
+            .unwrap_or(true)
+}
+
+fn running_loop(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    static GET_RUNNING_LOOP: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+    GET_RUNNING_LOOP
+        .import(py, "asyncio", "get_running_loop")?
+        .call0()
 }
 
 fn is_done(py: Python<'_>, future: &Py<PyAny>) -> bool {
@@ -484,7 +637,11 @@ impl Turn {
     fn __call__(&self, py: Python<'_>) -> PyResult<()> {
         let runtime = runtime(py)?;
         runtime.wake.drain();
-        runtime.turn(py, None).map(drop)
+        let turned = runtime.turn(py, None);
+        if turned.is_err() {
+            runtime.wake.rearm();
+        }
+        turned.map(drop)
     }
 }
 
@@ -620,6 +777,33 @@ fn ended(
     }
 }
 
+/// What today's SDK raises for a required argument left out: a
+/// `BamlError` carrying `baml.errors.InvalidArgument`.
+fn invalid_argument(py: Python<'_>, name: &str) -> PyErr {
+    let built = (|| -> PyResult<PyErr> {
+        let hooks = hooks(py)?;
+        let message = format!("Invalid argument: {name}");
+        let fields = PyDict::new(py);
+        fields.set_item("message", &message)?;
+        let value = match runtime(py)?
+            .plans
+            .class_of_name(py, "baml.errors.InvalidArgument")
+        {
+            Some(cls) => cls.call((), Some(&fields))?,
+            None => hooks
+                .class_instance
+                .bind(py)
+                .call1(("baml.errors.InvalidArgument", fields))?,
+        };
+        let kwargs = PyDict::new(py);
+        kwargs.set_item(intern!(py, "class_name"), "baml.errors.InvalidArgument")?;
+        Ok(PyErr::from_value(
+            hooks.baml_error.bind(py).call((value,), Some(&kwargs))?,
+        ))
+    })();
+    built.unwrap_or_else(|error| error)
+}
+
 // ---- functions and calls ----
 
 /// One exported function, as `define_function` makes it.
@@ -685,10 +869,7 @@ impl Function {
         }
         for (value, param) in values.iter().zip(&function.params) {
             if value.is_none() && !param.has_default {
-                return Err(PyTypeError::new_err(format!(
-                    "{} missing required argument {:?}",
-                    function.name, param.name
-                )));
+                return Err(invalid_argument(py, &param.name));
             }
         }
         Ok(values)
@@ -697,22 +878,29 @@ impl Function {
 
 #[pymethods]
 impl Function {
+    /// A sync function runs the call; an async one returns a coroutine
+    /// object whose arguments are read when it is first awaited, as an
+    /// `async def` reads them.
     #[pyo3(signature = (*args, **kwargs))]
     fn __call__(
-        &self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         args: &Bound<'_, PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyAny>> {
-        let values = self.arguments(py, args, kwargs)?;
-        if self.sync {
-            runtime(py)?.call_sync(py, self.export, &values)
+        let py = slf.py();
+        let function = slf.get();
+        if function.sync {
+            let values = function.arguments(py, args, kwargs)?;
+            runtime(py)?.call_sync(py, function.export, &values)
         } else {
             Ok(Py::new(
                 py,
                 Call {
-                    export: self.export,
-                    state: State::Ready(values),
+                    function: slf.clone().unbind(),
+                    state: State::Ready {
+                        args: args.clone().unbind(),
+                        kwargs: kwargs.map(|kwargs| kwargs.clone().unbind()),
+                    },
                 },
             )?
             .into_any())
@@ -721,8 +909,11 @@ impl Function {
 }
 
 enum State {
-    /// Not awaited yet: its arguments.
-    Ready(Vec<Option<Py<PyAny>>>),
+    /// Not awaited yet: its arguments as given.
+    Ready {
+        args: Py<PyTuple>,
+        kwargs: Option<Py<PyDict>>,
+    },
     /// Waiting on a future of the joined loop: the future and its
     /// `__await__` iterator.
     Waiting {
@@ -737,21 +928,73 @@ enum State {
 /// `create_task`, `gather` and `wait_for` take it as they take today's.
 #[pyclass(module = "baml_native._native")]
 struct Call {
-    export: u32,
+    function: Py<Function>,
     state: State,
 }
 
+impl Drop for Call {
+    /// A call never awaited warns, as a coroutine never awaited does.
+    fn drop(&mut self) {
+        if matches!(self.state, State::Ready { .. }) {
+            let export = self.function.get().export;
+            Python::attach(|py| {
+                let name = runtime(py)
+                    .ok()
+                    .and_then(|runtime| runtime.plans.interface().functions.get(export as usize))
+                    .map(|function| {
+                        function
+                            .name
+                            .rsplit('.')
+                            .next()
+                            .unwrap_or_default()
+                            .to_owned()
+                    })
+                    .unwrap_or_default();
+                let message = CString::new(format!("coroutine '{name}' was never awaited"))
+                    .unwrap_or_default();
+                let category = py.get_type::<PyRuntimeWarning>();
+                if let Err(error) = PyErr::warn(py, &category, &message, 1) {
+                    error.write_unraisable(py, None);
+                }
+            });
+        }
+    }
+}
+
 impl Call {
-    /// The first step: start, turn, and either return or wait.
-    fn begin(&mut self, py: Python<'_>, args: &[Option<Py<PyAny>>]) -> PyResult<Py<PyAny>> {
+    /// The first step: read the arguments, start, turn, and either return
+    /// or wait.
+    fn begin(
+        &mut self,
+        py: Python<'_>,
+        args: &Py<PyTuple>,
+        kwargs: Option<&Py<PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        let function = self.function.get();
+        let values = function.arguments(py, args.bind(py), kwargs.map(|kwargs| kwargs.bind(py)))?;
         let runtime = runtime(py)?;
-        let id = runtime.start(py, self.export, args)?;
-        let turned = runtime.turn(py, Some(id))?;
+        let id = runtime.start(py, function.export, &values)?;
+        let turned = match runtime.turn(py, Some(id)) {
+            Ok(turned) => turned,
+            Err(error) => {
+                runtime.abandon(py, id);
+                return Err(error);
+            }
+        };
         if let Some(result) = turned.mine {
             self.state = State::Done;
+            if let Some(next) = turned.next {
+                runtime.keep_timer(py, next);
+            }
             return Err(PyStopIteration::new_err((result?,)));
         }
-        let future = runtime.wait_on_loop(py, id, turned.next)?;
+        let future = match runtime.wait_on_loop(py, id, turned.next) {
+            Ok(future) => future,
+            Err(error) => {
+                runtime.abandon(py, id);
+                return Err(error);
+            }
+        };
         let iter = future.bind(py).call_method0(intern!(py, "__await__"))?;
         self.state = State::Waiting {
             id,
@@ -778,7 +1021,15 @@ impl Call {
         match step(&iter) {
             Ok(yielded) => Ok(yielded.unbind()),
             Err(error) => {
-                self.state = State::Done;
+                // Done, by its result or by what was thrown in. A call whose
+                // result has not come is abandoned: freed when it comes.
+                if let State::Waiting { id, future, .. } =
+                    std::mem::replace(&mut self.state, State::Done)
+                    && !is_done(py, &future)
+                    && let Ok(runtime) = runtime(py)
+                {
+                    runtime.abandon(py, id);
+                }
                 Err(error)
             }
         }
@@ -786,7 +1037,7 @@ impl Call {
 
     fn send_value(&mut self, py: Python<'_>, value: Py<PyAny>) -> PyResult<Py<PyAny>> {
         match std::mem::replace(&mut self.state, State::Done) {
-            State::Ready(args) => self.begin(py, &args),
+            State::Ready { args, kwargs } => self.begin(py, &args, kwargs.as_ref()),
             waiting @ State::Waiting { .. } => {
                 self.state = waiting;
                 self.forward(py, |iter| iter.call_method1(intern!(py, "send"), (value,)))
@@ -844,6 +1095,29 @@ impl Call {
         }
     }
 
+    #[expect(clippy::needless_pass_by_value, reason = "the signature pyo3 calls")]
+    fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
+        visit.call(&self.function)?;
+        match &self.state {
+            State::Ready { args, kwargs } => {
+                visit.call(args)?;
+                if let Some(kwargs) = kwargs {
+                    visit.call(kwargs)?;
+                }
+            }
+            State::Waiting { future, iter, .. } => {
+                visit.call(future)?;
+                visit.call(iter)?;
+            }
+            State::Done => {}
+        }
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.state = State::Done;
+    }
+
     fn close(&mut self, py: Python<'_>) {
         if let State::Waiting { id, future, .. } = std::mem::replace(&mut self.state, State::Done) {
             let _ = future.bind(py).call_method0(intern!(py, "cancel"));
@@ -888,19 +1162,28 @@ fn load(py: Python<'_>, path: &str, interface_hash: u64) -> PyResult<()> {
     if RUNTIME.get(py).is_some() {
         return Ok(());
     }
-    let (reader, writer) =
-        UnixStream::pair().map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
-    for end in [&reader, &writer] {
-        end.set_nonblocking(true)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
-    }
-    let wake: &'static Wake = Box::leak(Box::new(Wake {
-        owed: AtomicBool::new(false),
-        reader,
-        writer,
-        lock: Mutex::new(()),
-        changed: Condvar::new(),
-    }));
+    // One wake for the process: two threads loading at once both hand the
+    // library the same one, so `RUNTIME` holds the one the library wakes.
+    let wake: &'static Wake = match WAKE.get() {
+        Some(wake) => wake,
+        None => {
+            let (reader, writer) =
+                UnixStream::pair().map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+            for end in [&reader, &writer] {
+                end.set_nonblocking(true)
+                    .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+            }
+            WAKE.get_or_init(|| {
+                Box::leak(Box::new(Wake {
+                    owed: AtomicBool::new(false),
+                    reader,
+                    writer,
+                    lock: Mutex::new(()),
+                    changed: Condvar::new(),
+                }))
+            })
+        }
+    };
     let library = py
         .detach(|| Library::load(path, interface_hash, move || wake.wake()))
         .map_err(|error| -> PyErr {
@@ -990,17 +1273,63 @@ fn set_release_gil(release: bool) {
     RELEASE_GIL.store(release, Ordering::Relaxed);
 }
 
-/// How many handles are live. For tests.
+/// How many handles are live. For tests; refused while the library is
+/// busy on this thread, as a call is.
 #[pyfunction]
 fn handle_count(py: Python<'_>) -> PyResult<u64> {
-    Ok(runtime(py)?.library.handle_count())
+    let runtime = runtime(py)?;
+    let _busy = runtime.inner()?;
+    Ok(runtime.library.handle_count())
 }
 
-/// Collect now. For tests.
+/// Collect now. For tests; refused while the library is busy on this
+/// thread.
 #[pyfunction]
 fn collect(py: Python<'_>) -> PyResult<()> {
-    runtime(py)?.library.collect();
+    let runtime = runtime(py)?;
+    let _busy = runtime.inner()?;
+    runtime.library.collect();
     Ok(())
+}
+
+/// Panic on purpose at the next `"event"` delivered or `"start"`. For
+/// tests.
+#[pyfunction]
+fn panic_next(at: &str) -> PyResult<()> {
+    TEST_PANIC.store(
+        match at {
+            "event" => 1,
+            "start" => 2,
+            other => return Err(PyTypeError::new_err(format!("no panic point {other:?}"))),
+        },
+        Ordering::Release,
+    );
+    Ok(())
+}
+
+/// A model of `cls` from `fields` (keyed by BAML field name) the way the
+/// module makes result models, and whether it falls back to validating.
+/// For tests.
+#[pyfunction]
+fn build_model<'py>(
+    py: Python<'py>,
+    cls: Bound<'py, PyAny>,
+    fields: &Bound<'py, PyDict>,
+) -> PyResult<(Bound<'py, PyAny>, bool)> {
+    let runtime = runtime(py)?;
+    let names: Vec<String> = fields
+        .keys()
+        .iter()
+        .map(|key| key.extract::<String>())
+        .collect::<PyResult<_>>()?;
+    let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+    let class = plan::ClassPy::of(py, cls, &refs)?;
+    let dict = PyDict::new(py);
+    for (slot, name) in names.iter().enumerate() {
+        dict.set_item(class.attr(py, slot), fields.get_item(name)?)?;
+    }
+    let validates = class.validates_always();
+    Ok((runtime.plans.make_model(py, &class, dict)?, validates))
 }
 
 /// How many calls have not been reported ended. For tests.
@@ -1046,6 +1375,8 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(calls_in_flight, module)?)?;
     module.add_function(wrap_pyfunction!(interface_json, module)?)?;
     module.add_function(wrap_pyfunction!(start_unchecked, module)?)?;
+    module.add_function(wrap_pyfunction!(panic_next, module)?)?;
+    module.add_function(wrap_pyfunction!(build_model, module)?)?;
     module.add_class::<Function>()?;
     module.add_class::<Call>()?;
     Ok(())

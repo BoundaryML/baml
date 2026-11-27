@@ -22,6 +22,11 @@ from . import _native
 
 UnhandledSpawnErrorHandler = Callable[[BaseException, bool], None]
 
+# Every call of a function the library does not export, by name, in order:
+# how a test runner tells the tests of refused functions, whatever they
+# catch.
+_refused_calls: List[str] = []
+
 _unhandled_spawn_error_handler: UnhandledSpawnErrorHandler = default_unhandled_spawn_error_handler
 
 
@@ -86,21 +91,23 @@ def define_function(
     if mode not in ("sync", "async"):
         raise ValueError(f"mode must be 'sync' or 'async', got {mode!r}")
     name = baml_fqn[len("user.") :] if baml_fqn.startswith("user.") else baml_fqn
-    function: Any = None
-    if not (type_params or class_type_params):
-        function = _native.function(
-            name, mode == "sync", list(required_param_names), dict(param_aliases or {})
-        )
+    # Whether the function is in the library is the library's interface's
+    # answer, nothing else.
+    function: Any = _native.function(
+        name, mode == "sync", list(required_param_names), dict(param_aliases or {})
+    )
     if function is None:
         message = f"{baml_fqn} is not in the native library (the packer refused it)"
         if mode == "sync":
 
             def function(*args: Any, **kwargs: Any) -> Any:
+                _refused_calls.append(baml_fqn)
                 raise NotImplementedError(message)
 
         else:
 
             async def function(*args: Any, **kwargs: Any) -> Any:
+                _refused_calls.append(baml_fqn)
                 raise NotImplementedError(message)
 
     if binding_name is not None:
@@ -119,6 +126,8 @@ set_release_gil = _native.set_release_gil
 handle_count = _native.handle_count
 collect = _native.collect
 calls_in_flight = _native.calls_in_flight
+panic_next = _native.panic_next
+build_model = _native.build_model
 
 __all__ = [
     "load",

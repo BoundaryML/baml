@@ -55,17 +55,99 @@ fn model_mode() -> ModelMode {
 }
 
 /// A class's Python side.
-struct ClassPy {
+pub(crate) struct ClassPy {
     cls: Py<PyAny>,
     /// Per field, in slot order, its Python attribute name.
     attrs: Vec<Py<PyString>>,
     /// Every attribute name: what `__pydantic_fields_set__` starts as.
     fields_set: Py<PyFrozenSet>,
+    /// The model is one the native construct would build wrong: it allows
+    /// extra fields, or has private attributes, validators or a
+    /// `model_post_init`. It is always made with `model_validate`.
+    validate_always: bool,
+}
+
+impl ClassPy {
+    /// The Python side of `cls`, a pydantic model, for fields named (as BAML
+    /// names them) `fields`, in slot order. A field is matched to its
+    /// attribute by alias, then by name.
+    pub(crate) fn of(py: Python<'_>, cls: Bound<'_, PyAny>, fields: &[&str]) -> PyResult<Self> {
+        let model_fields = cls.getattr(intern!(py, "model_fields"))?;
+        let entries = model_fields.cast::<PyDict>()?.items();
+        let mut attrs = Vec::with_capacity(fields.len());
+        for field in fields {
+            let mut found = None;
+            for entry in entries.iter() {
+                let (name, info) = item_pair(&entry)?;
+                let alias = info.getattr(intern!(py, "alias"))?;
+                let named = if alias.is_none() { &name } else { &alias };
+                if named.cast::<PyString>()?.to_str()? == *field {
+                    found = Some(name.cast_into::<PyString>()?);
+                    break;
+                }
+            }
+            attrs.push(found.unwrap_or_else(|| PyString::new(py, field)).unbind());
+        }
+        let fields_set = PyFrozenSet::new(py, attrs.iter().map(|attr| attr.bind(py)))?.unbind();
+        let validate_always = needs_validation(py, &cls);
+        Ok(Self {
+            cls: cls.unbind(),
+            attrs,
+            fields_set,
+            validate_always,
+        })
+    }
+}
+
+impl ClassPy {
+    pub(crate) fn attr<'py>(&self, py: Python<'py>, slot: usize) -> &Bound<'py, PyString> {
+        self.attrs[slot].bind(py)
+    }
+
+    pub(crate) fn validates_always(&self) -> bool {
+        self.validate_always
+    }
+}
+
+fn item_pair<'py>(item: &Bound<'py, PyAny>) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+    item.extract()
+}
+
+/// Whether the native construct would build `cls` wrong: `extra` allowed,
+/// private attributes, validators, or a `model_post_init` of its own.
+fn needs_validation(py: Python<'_>, cls: &Bound<'_, PyAny>) -> bool {
+    let not_empty = |object: PyResult<Bound<'_, PyAny>>| {
+        object.is_ok_and(|object| object.len().is_ok_and(|n| n > 0))
+    };
+    let extra = cls
+        .getattr(intern!(py, "model_config"))
+        .and_then(|config| config.get_item("extra"))
+        .is_ok_and(|extra| {
+            extra
+                .extract::<String>()
+                .is_ok_and(|extra| extra == "allow")
+        });
+    let private = not_empty(cls.getattr(intern!(py, "__private_attributes__")));
+    let post_init = cls
+        .getattr(intern!(py, "__pydantic_post_init__"))
+        .is_ok_and(|hook| !hook.is_none());
+    let validators = cls
+        .getattr(intern!(py, "__pydantic_decorators__"))
+        .is_ok_and(|decorators| {
+            [
+                "validators",
+                "field_validators",
+                "root_validators",
+                "model_validators",
+            ]
+            .iter()
+            .any(|kind| not_empty(decorators.getattr(*kind)))
+        });
+    extra || private || post_init || validators
 }
 
 /// An enum's Python side.
 struct EnumPy {
-    cls: Py<PyAny>,
     /// Per variant, in order, its member.
     members: Vec<Py<PyAny>>,
     /// A member's address to its index.
@@ -83,6 +165,7 @@ pub(crate) struct Plans {
     resolved: Vec<PyOnceLock<Resolved>>,
     type_map: PyOnceLock<Py<PyAny>>,
     object_new: PyOnceLock<Py<PyAny>>,
+    enum_type: PyOnceLock<Py<PyAny>>,
 }
 
 /// A value of an unexpected shape: an error of the bindings.
@@ -97,7 +180,22 @@ impl Plans {
             resolved: interface.types.iter().map(|_| PyOnceLock::new()).collect(),
             type_map: PyOnceLock::new(),
             object_new: PyOnceLock::new(),
+            enum_type: PyOnceLock::new(),
         }
+    }
+
+    /// The generated class named `fqn` in the type map, if there is one.
+    pub(crate) fn class_of_name<'py>(
+        &self,
+        py: Python<'py>,
+        fqn: &str,
+    ) -> Option<Bound<'py, PyAny>> {
+        self.type_map
+            .get(py)?
+            .bind(py)
+            .call_method1(intern!(py, "get_class"), (fqn,))
+            .ok()
+            .filter(|cls| !cls.is_none())
     }
 
     pub(crate) fn interface(&self) -> &'static Interface {
@@ -138,36 +236,8 @@ impl Plans {
             match &def.kind {
                 TypeDefKind::Class { fields } => {
                     let cls = type_map.call_method1(intern!(py, "get_class"), (&fqn,))?;
-                    let model_fields = cls.getattr(intern!(py, "model_fields"))?;
-                    let model_fields = model_fields.cast::<PyDict>()?;
-                    let mut attrs = Vec::with_capacity(fields.len());
-                    for field in fields {
-                        let mut found = None;
-                        for (name, info) in model_fields.iter() {
-                            let alias = info.getattr(intern!(py, "alias"))?;
-                            let matches = if alias.is_none() {
-                                name.cast::<PyString>()?.to_str()? == field.name
-                            } else {
-                                alias.cast::<PyString>()?.to_str()? == field.name
-                            };
-                            if matches {
-                                found = Some(name.cast_into::<PyString>()?);
-                                break;
-                            }
-                        }
-                        attrs.push(
-                            found
-                                .unwrap_or_else(|| PyString::new(py, &field.name))
-                                .unbind(),
-                        );
-                    }
-                    let fields_set =
-                        PyFrozenSet::new(py, attrs.iter().map(|attr| attr.bind(py)))?.unbind();
-                    Ok(Resolved::Class(ClassPy {
-                        cls: cls.unbind(),
-                        attrs,
-                        fields_set,
-                    }))
+                    let names: Vec<&str> = fields.iter().map(|field| field.name.as_str()).collect();
+                    ClassPy::of(py, cls, &names).map(Resolved::Class)
                 }
                 TypeDefKind::Enum { variants } => {
                     let cls = type_map.call_method1(intern!(py, "get_enum"), (&fqn,))?;
@@ -184,11 +254,7 @@ impl Plans {
                         );
                         members.push(member.unbind());
                     }
-                    Ok(Resolved::Enum(EnumPy {
-                        cls: cls.unbind(),
-                        members,
-                        index,
-                    }))
+                    Ok(Resolved::Enum(EnumPy { members, index }))
                 }
             }
         })
@@ -261,27 +327,37 @@ impl Plans {
             Type::Enum(number) | Type::EnumVariant { of: number, .. } => {
                 kind == tag::ENUM_VARIANT && value.class_of() == Some(*number)
             }
+            // Every element: an array does not say its element type.
             Type::List(element) => {
                 kind == tag::ARRAY
-                    && match value.elements() {
-                        Ok(mut elements) => match elements.next() {
-                            Some(Ok(first)) => Self::accepts(element, &first),
-                            Some(Err(_)) => false,
-                            None => true,
-                        },
-                        Err(_) => false,
-                    }
+                    && value.elements().is_ok_and(|mut elements| {
+                        elements.all(|item| item.is_ok_and(|item| Self::accepts(element, &item)))
+                    })
             }
             Type::Map(inner) => {
                 kind == tag::MAP
-                    && match value.entries() {
-                        Ok(entries) => entries
-                            .first()
-                            .is_none_or(|(_, first)| Self::accepts(inner, first)),
-                        Err(_) => false,
-                    }
+                    && value.entries().is_ok_and(|entries| {
+                        entries.iter().all(|(_, item)| Self::accepts(inner, item))
+                    })
             }
             Type::Union(members) => members.iter().any(|member| Self::accepts(member, value)),
+        }
+    }
+
+    /// Whether `value`'s tag alone can be `ty`: no element is read.
+    fn tag_fits(ty: &Type, value: &BamlValue<'_>) -> bool {
+        let kind = value.kind();
+        match ty {
+            Type::Null => value.is_null(),
+            Type::Int | Type::LiteralInt(_) => value.raw().tag == tag::INT,
+            Type::Float => value.raw().tag == tag::FLOAT,
+            Type::Bool | Type::LiteralBool(_) => value.raw().tag == tag::BOOL,
+            Type::String | Type::LiteralString(_) => value.is_string(),
+            Type::Class(_) => kind == tag::INSTANCE,
+            Type::Enum(_) | Type::EnumVariant { .. } => kind == tag::ENUM_VARIANT,
+            Type::List(_) => kind == tag::ARRAY,
+            Type::Map(_) => kind == tag::MAP,
+            Type::Union(members) => members.iter().any(|member| Self::tag_fits(member, value)),
         }
     }
 
@@ -359,16 +435,22 @@ impl Plans {
                 Ok(dict.into_any())
             }
             Type::Union(members) => {
-                let member = members
+                // By the value's tag when one member alone has it (the usual
+                // case: `T | null`); otherwise by reading it.
+                let mut by_tag = members
                     .iter()
-                    .find(|member| Self::accepts(member, value))
-                    .ok_or_else(|| {
-                        PyRuntimeError::new_err(format!(
-                            "a value of tag {} is no member of {}",
-                            value.kind(),
-                            self.type_name(ty)
-                        ))
-                    })?;
+                    .filter(|member| Self::tag_fits(member, value));
+                let member = match (by_tag.next(), by_tag.next()) {
+                    (Some(only), None) => Some(only),
+                    _ => members.iter().find(|member| Self::accepts(member, value)),
+                };
+                let member = member.ok_or_else(|| {
+                    PyRuntimeError::new_err(format!(
+                        "a value of tag {} is no member of {}",
+                        value.kind(),
+                        self.type_name(ty)
+                    ))
+                })?;
                 self.out(py, member, value, depth)
             }
         }
@@ -393,8 +475,23 @@ impl Plans {
                 .map_err(|e| decode(&e))?;
             dict.set_item(attr.bind(py), self.out(py, &field.ty, &item, depth + 1)?)?;
         }
+        self.make_model(py, class, dict)
+    }
+
+    /// A model of `class` from its fields, keyed by attribute name, the way
+    /// the model mode says.
+    pub(crate) fn make_model<'py>(
+        &self,
+        py: Python<'py>,
+        class: &ClassPy,
+        dict: Bound<'py, PyDict>,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let cls = class.cls.bind(py);
-        match model_mode() {
+        let mode = match model_mode() {
+            ModelMode::Native if class.validate_always => ModelMode::Validate,
+            mode => mode,
+        };
+        match mode {
             ModelMode::Validate => cls.call_method1(intern!(py, "model_validate"), (dict,)),
             ModelMode::Construct => {
                 cls.call_method(intern!(py, "model_construct"), (), Some(&dict))
@@ -423,92 +520,377 @@ impl Plans {
     }
 
     // ---- into BAML ----
+    //
+    // Arguments are read as today's SDK's encoder reads them
+    // (`bridge_encode`, `Rules::Python`): `bool` is not an `int`; an `int`
+    // fits a `float` only when the float is exactly that integer; an enum
+    // member is a variant of its own enum only, and is told apart before
+    // `str`, which generated enums mix in; a `str` names a variant by
+    // conversion; a pydantic instance is an instance of its class, and a
+    // `dict` with string keys stands in for a class when every key is a
+    // declared field (a field left out is null where the class allows
+    // null). Under a union the members are ranked by how the value's shape
+    // stands to them (identity, then natural, then conversion). Among the
+    // best rank whose members take the whole value, a single type wins;
+    // otherwise the value's own type; otherwise the member that left out
+    // the fewest fields; otherwise the value is ambiguous.
 
-    /// Whether `object` fits `ty`, looking only at the top of a container
-    /// and its first element. `widen`: an `int` fits `float`.
-    fn fits(&self, py: Python<'_>, ty: &Type, object: &Bound<'_, PyAny>, widen: bool) -> bool {
-        let is_bool = object.is_instance_of::<PyBool>();
-        let is_int = !is_bool && object.is_instance_of::<PyInt>();
-        match ty {
-            Type::Null => object.is_none(),
-            Type::Bool => is_bool,
-            Type::LiteralBool(value) => is_bool && object.is_truthy().is_ok_and(|b| b == *value),
-            Type::Int => is_int,
-            Type::LiteralInt(value) => is_int && object.extract::<i64>().is_ok_and(|v| v == *value),
-            Type::Float => object.is_instance_of::<PyFloat>() || (widen && is_int),
-            Type::String => object.is_instance_of::<PyString>(),
-            Type::LiteralString(value) => object
-                .cast::<PyString>()
-                .is_ok_and(|text| text.to_str().is_ok_and(|text| text == value)),
-            Type::Class(number) => self
-                .class_py(py, *number)
-                .is_ok_and(|class| object.is_instance(class.cls.bind(py)).unwrap_or(false)),
-            Type::Enum(number) => self
+    fn is_enum_member(&self, py: Python<'_>, object: &Bound<'_, PyAny>) -> bool {
+        if object.is_none()
+            || object.is_exact_instance_of::<PyString>()
+            || object.is_exact_instance_of::<PyInt>()
+            || object.is_exact_instance_of::<PyBool>()
+            || object.is_exact_instance_of::<PyFloat>()
+            || object.is_exact_instance_of::<PyList>()
+            || object.is_exact_instance_of::<PyDict>()
+        {
+            return false;
+        }
+        self.enum_type
+            .get_or_try_init(py, || py.import("enum")?.getattr("Enum").map(Bound::unbind))
+            .is_ok_and(|enumeration| object.is_instance(enumeration.bind(py)).unwrap_or(false))
+    }
+
+    fn shape(&self, py: Python<'_>, object: &Bound<'_, PyAny>) -> Shape {
+        if object.is_none() {
+            Shape::Null
+        } else if self.is_enum_member(py, object) {
+            Shape::Member
+        } else if object.is_instance_of::<PyBool>() {
+            Shape::Bool
+        } else if object.is_instance_of::<PyInt>() {
+            Shape::Int
+        } else if object.is_instance_of::<PyFloat>() {
+            Shape::Float
+        } else if object.is_instance_of::<PyString>() {
+            Shape::Str
+        } else if object.is_instance_of::<PyList>() || object.is_instance_of::<PyTuple>() {
+            Shape::Seq
+        } else if object.is_instance_of::<PyDict>() {
+            Shape::Dict
+        } else {
+            Shape::Object
+        }
+    }
+
+    /// How `object`'s shape stands to `ty`, or `None` when it never can.
+    fn rank(
+        &self,
+        py: Python<'_>,
+        ty: &Type,
+        object: &Bound<'_, PyAny>,
+        shape: Shape,
+    ) -> Option<Rank> {
+        match (shape, ty) {
+            (_, Type::Union(members)) => members
+                .iter()
+                .filter_map(|member| self.rank(py, member, object, shape))
+                .min(),
+            (Shape::Null, Type::Null)
+            | (Shape::Bool, Type::Bool | Type::LiteralBool(_))
+            | (Shape::Int, Type::Int | Type::LiteralInt(_))
+            | (Shape::Float, Type::Float)
+            | (Shape::Str, Type::String | Type::LiteralString(_)) => Some(Rank::Identity),
+            (Shape::Member, Type::Enum(number) | Type::EnumVariant { of: number, .. }) => self
                 .enum_py(py, *number)
-                .is_ok_and(|e| e.index.contains_key(&(object.as_ptr() as usize))),
-            Type::EnumVariant { of, index } => self
-                .enum_py(py, *of)
-                .is_ok_and(|e| e.index.get(&(object.as_ptr() as usize)) == Some(index)),
-            Type::List(element) => {
-                let first = if let Ok(list) = object.cast::<PyList>() {
-                    Some(list.get_item(0).ok())
-                } else if let Ok(tuple) = object.cast::<PyTuple>() {
-                    Some(tuple.get_item(0).ok())
-                } else {
-                    None
+                .ok()
+                .filter(|e| e.index.contains_key(&(object.as_ptr() as usize)))
+                .map(|_| Rank::Identity),
+            (Shape::Int, Type::Float) => exact_float(object).map(|_| Rank::Conversion),
+            (Shape::Str, Type::Enum(_) | Type::EnumVariant { .. }) => Some(Rank::Conversion),
+            (Shape::Seq, Type::List(_)) | (Shape::Dict, Type::Map(_)) => Some(Rank::Natural),
+            (Shape::Dict, Type::Class(_)) => Some(Rank::Conversion),
+            (Shape::Object, Type::Class(number)) => self
+                .class_py(py, *number)
+                .ok()
+                .filter(|class| object.is_instance(class.cls.bind(py)).unwrap_or(false))
+                .map(|_| Rank::Identity),
+            _ => None,
+        }
+    }
+
+    /// The index of the variant of enum `number` that `object` is: one of
+    /// its members, or a string naming one.
+    fn variant_of(
+        &self,
+        py: Python<'_>,
+        number: u32,
+        object: &Bound<'_, PyAny>,
+        shape: Shape,
+    ) -> Option<u32> {
+        match shape {
+            Shape::Member => self
+                .enum_py(py, number)
+                .ok()?
+                .index
+                .get(&(object.as_ptr() as usize))
+                .copied(),
+            Shape::Str => {
+                let text = object.cast::<PyString>().ok()?.to_str().ok()?;
+                let TypeDefKind::Enum { variants } = &self.def(number).ok()?.kind else {
+                    return None;
                 };
-                match first {
-                    None => false,
-                    Some(None) => true,
-                    Some(Some(first)) => self.fits(py, element, &first, widen),
+                variants
+                    .iter()
+                    .position(|variant| variant == text)
+                    .and_then(|place| u32::try_from(place).ok())
+            }
+            _ => None,
+        }
+    }
+
+    /// The value of field `slot` of class `class` from `source`, if given.
+    fn field_value<'py>(
+        py: Python<'py>,
+        class: &ClassPy,
+        name: &str,
+        slot: usize,
+        source: &Source<'py>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        match source {
+            Source::Instance { object, dict } => {
+                let attr = class.attrs[slot].bind(py);
+                match dict.get_item(attr)? {
+                    Some(value) => Ok(Some(value)),
+                    None if object.hasattr(attr)? => object.getattr(attr).map(Some),
+                    None => Ok(None),
                 }
             }
-            Type::Map(inner) => match object.cast::<PyDict>() {
-                Ok(dict) => dict
-                    .values()
-                    .get_item(0)
-                    .map_or(true, |first| self.fits(py, inner, &first, widen)),
-                Err(_) => false,
-            },
-            Type::Union(members) => members.iter().any(|m| self.fits(py, m, object, widen)),
+            Source::Mapping(dict) => dict.get_item(name),
+        }
+    }
+
+    /// Where a class argument's fields come from: an instance of the class,
+    /// or a `dict` keyed by field name whose every key is a field.
+    fn source<'py>(
+        &self,
+        py: Python<'py>,
+        number: u32,
+        object: &Bound<'py, PyAny>,
+        shape: Shape,
+    ) -> PyResult<Option<Source<'py>>> {
+        let class = self.class_py(py, number)?;
+        match shape {
+            Shape::Object if object.is_instance(class.cls.bind(py))? => {
+                let dict = object
+                    .getattr(intern!(py, "__dict__"))?
+                    .cast_into::<PyDict>()?;
+                Ok(Some(Source::Instance {
+                    object: object.clone(),
+                    dict,
+                }))
+            }
+            Shape::Dict => {
+                let dict = object.clone().cast_into::<PyDict>()?;
+                let TypeDefKind::Class { fields } = &self.def(number)?.kind else {
+                    return Ok(None);
+                };
+                for key in dict.keys().iter() {
+                    let Ok(key) = key.cast::<PyString>() else {
+                        return Ok(None);
+                    };
+                    let key = key.to_str()?;
+                    if !fields.iter().any(|field| field.name == key) {
+                        return Ok(None);
+                    }
+                }
+                Ok(Some(Source::Mapping(dict)))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Whether `object` takes `ty` all the way down: `Some` with how many
+    /// fields it left out, `None` when it does not fit.
+    fn check(
+        &self,
+        py: Python<'_>,
+        ty: &Type,
+        object: &Bound<'_, PyAny>,
+        depth: u32,
+    ) -> PyResult<Option<u32>> {
+        if depth > MAX_DEPTH {
+            return Err(too_deep());
+        }
+        let shape = self.shape(py, object);
+        let fits = |fit: bool| Ok(fit.then_some(0));
+        match ty {
+            Type::Union(members) => Ok(match self.choose(py, members, object, depth, false)? {
+                Choice::One(_, omitted) => Some(omitted),
+                Choice::Unfit | Choice::Ambiguous => None,
+            }),
+            Type::Null => fits(shape == Shape::Null),
+            Type::Bool => fits(shape == Shape::Bool),
+            Type::LiteralBool(value) => fits(shape == Shape::Bool && object.is_truthy()? == *value),
+            Type::Int => fits(shape == Shape::Int && object.extract::<i64>().is_ok()),
+            Type::LiteralInt(value) => {
+                fits(shape == Shape::Int && object.extract::<i64>().is_ok_and(|v| v == *value))
+            }
+            Type::Float => fits(
+                shape == Shape::Float || (shape == Shape::Int && exact_float(object).is_some()),
+            ),
+            Type::String => fits(shape == Shape::Str),
+            Type::LiteralString(value) => {
+                fits(shape == Shape::Str && object.cast::<PyString>()?.to_str()? == value)
+            }
+            Type::Enum(number) => fits(self.variant_of(py, *number, object, shape).is_some()),
+            Type::EnumVariant { of, index } => {
+                fits(self.variant_of(py, *of, object, shape) == Some(*index))
+            }
+            Type::List(element) => {
+                if shape != Shape::Seq {
+                    return Ok(None);
+                }
+                let mut omitted = 0;
+                for item in object.try_iter()? {
+                    match self.check(py, element, &item?, depth + 1)? {
+                        Some(count) => omitted += count,
+                        None => return Ok(None),
+                    }
+                }
+                Ok(Some(omitted))
+            }
+            Type::Map(inner) => {
+                if shape != Shape::Dict {
+                    return Ok(None);
+                }
+                let mut omitted = 0;
+                for item in object.cast::<PyDict>()?.items().iter() {
+                    let (key, value) = item_pair(&item)?;
+                    if !key.is_instance_of::<PyString>() {
+                        return Ok(None);
+                    }
+                    match self.check(py, inner, &value, depth + 1)? {
+                        Some(count) => omitted += count,
+                        None => return Ok(None),
+                    }
+                }
+                Ok(Some(omitted))
+            }
+            Type::Class(number) => {
+                let Some(source) = self.source(py, *number, object, shape)? else {
+                    return Ok(None);
+                };
+                let class = self.class_py(py, *number)?;
+                let TypeDefKind::Class { fields } = &self.def(*number)?.kind else {
+                    return Ok(None);
+                };
+                let mut omitted = 0;
+                for (slot, field) in fields.iter().enumerate() {
+                    match Self::field_value(py, class, &field.name, slot, &source)? {
+                        Some(value) => match self.check(py, &field.ty, &value, depth + 1)? {
+                            Some(count) => omitted += count,
+                            None => return Ok(None),
+                        },
+                        None if nullable(&field.ty) => omitted += 1,
+                        None => return Ok(None),
+                    }
+                }
+                Ok(Some(omitted))
+            }
         }
     }
 
     /// The member of a union `object` is built as.
-    fn pick<'t>(
+    fn choose<'t>(
         &self,
         py: Python<'_>,
-        ty: &Type,
         members: &'t [Type],
         object: &Bound<'_, PyAny>,
-    ) -> PyResult<&'t Type> {
-        for widen in [false, true] {
-            let mut fitting = members.iter().filter(|m| self.fits(py, m, object, widen));
-            let Some(first) = fitting.next() else {
-                continue;
-            };
-            // An empty container fits every container member equally: the
-            // value does not say which it is.
-            let empty = object.len().is_ok_and(|length| length == 0)
-                && matches!(first, Type::List(_) | Type::Map(_));
-            if empty && fitting.any(|other| other != first) {
-                return Err(PyTypeError::new_err(format!(
-                    "an empty {} fits more than one member of `{}`",
-                    if matches!(first, Type::List(_)) {
-                        "list"
-                    } else {
-                        "dict"
-                    },
-                    self.type_name(ty)
-                )));
-            }
-            return Ok(first);
+        depth: u32,
+        building: bool,
+    ) -> PyResult<Choice<'t>> {
+        let shape = self.shape(py, object);
+        let mut ranked: Vec<(Rank, &'t Type)> = members
+            .iter()
+            .filter_map(|member| {
+                self.rank(py, member, object, shape)
+                    .map(|rank| (rank, member))
+            })
+            .collect();
+        // When building, a member the shape alone picks is built at once: a
+        // value that does not fit it fails the build with the same error.
+        if building && let [(_, only)] = ranked.as_slice() {
+            return Ok(Choice::One(only, 0));
         }
-        Err(PyTypeError::new_err(format!(
-            "{} does not fit `{}`",
-            describe(object),
-            self.type_name(ty)
-        )))
+        ranked.sort_by_key(|(rank, _)| *rank);
+        let mut index = 0;
+        while index < ranked.len() {
+            let rank = ranked[index].0;
+            let mut fits: Vec<(&'t Type, u32)> = Vec::new();
+            while index < ranked.len() && ranked[index].0 == rank {
+                let member = ranked[index].1;
+                index += 1;
+                if let Some(omitted) = self.check(py, member, object, depth)? {
+                    if !fits.iter().any(|(seen, _)| equivalent(seen, member)) {
+                        fits.push((member, omitted));
+                    }
+                }
+            }
+            match fits.as_slice() {
+                [] => continue,
+                [(member, omitted)] => return Ok(Choice::One(member, *omitted)),
+                _ => {}
+            }
+            if let Some((member, omitted)) = fits
+                .iter()
+                .find(|(member, _)| self.is_natural(py, member, object))
+            {
+                return Ok(Choice::One(member, *omitted));
+            }
+            let fewest = fits.iter().map(|(_, omitted)| *omitted).min().unwrap_or(0);
+            let mut cheapest = fits.iter().filter(|(_, omitted)| *omitted == fewest);
+            return Ok(match (cheapest.next(), cheapest.next()) {
+                (Some((member, omitted)), None) => Choice::One(member, *omitted),
+                _ => Choice::Ambiguous,
+            });
+        }
+        Ok(Choice::Unfit)
+    }
+
+    /// Whether `ty` is the type `object` has by itself, as the compiler
+    /// would type it as a literal.
+    fn is_natural(&self, py: Python<'_>, ty: &Type, object: &Bound<'_, PyAny>) -> bool {
+        let shape = self.shape(py, object);
+        match (ty, shape) {
+            (Type::Null, Shape::Null)
+            | (Type::Bool, Shape::Bool)
+            | (Type::Int, Shape::Int)
+            | (Type::Float, Shape::Float)
+            | (Type::String, Shape::Str) => true,
+            (Type::Enum(number), Shape::Member) => {
+                self.variant_of(py, *number, object, shape).is_some()
+            }
+            (Type::Class(_), Shape::Object) => {
+                self.rank(py, ty, object, shape) == Some(Rank::Identity)
+            }
+            (Type::List(element), Shape::Seq) => object
+                .try_iter()
+                .and_then(Iterator::collect::<PyResult<Vec<_>>>)
+                .is_ok_and(|items| self.all_natural(py, element, &items)),
+            (Type::Map(inner), Shape::Dict) => object.cast::<PyDict>().is_ok_and(|dict| {
+                self.all_natural(py, inner, &dict.values().iter().collect::<Vec<_>>())
+            }),
+            _ => false,
+        }
+    }
+
+    /// Whether `ty` is the join of the natural types of `items`.
+    fn all_natural(&self, py: Python<'_>, ty: &Type, items: &[Bound<'_, PyAny>]) -> bool {
+        if items.is_empty() {
+            return false;
+        }
+        match ty {
+            Type::Union(members) => {
+                items
+                    .iter()
+                    .all(|item| members.iter().any(|m| self.is_natural(py, m, item)))
+                    && members
+                        .iter()
+                        .all(|m| items.iter().any(|item| self.is_natural(py, m, item)))
+            }
+            ty => items.iter().all(|item| self.is_natural(py, ty, item)),
+        }
     }
 
     /// Build `object` in BAML memory as a value of `ty`.
@@ -531,9 +913,7 @@ impl Plans {
         depth: u32,
     ) -> PyResult<BamlValue<'s>> {
         if depth > MAX_DEPTH {
-            return Err(PyTypeError::new_err(format!(
-                "an argument nested too deeply: more than {MAX_DEPTH} levels"
-            )));
+            return Err(too_deep());
         }
         let mismatch = || {
             PyTypeError::new_err(format!(
@@ -543,10 +923,21 @@ impl Plans {
             ))
         };
         let refused = |error: SdkError| PyTypeError::new_err(error.to_string());
-        let is_bool = object.is_instance_of::<PyBool>();
+        // Exact built-in types are told at once; anything else is looked at
+        // as today's encoder does (an enum member before what it mixes in).
+        let shape = || self.shape(py, object);
         match ty {
+            Type::Union(members) => match self.choose(py, members, object, depth, true)? {
+                Choice::One(member, _) => self.build(py, session, member, object, depth),
+                Choice::Unfit => Err(mismatch()),
+                Choice::Ambiguous => Err(PyTypeError::new_err(format!(
+                    "{} fits more than one member of `{}`: say which",
+                    describe(object),
+                    self.type_name(ty)
+                ))),
+            },
             Type::Int | Type::LiteralInt(_) => {
-                if is_bool || !object.is_instance_of::<PyInt>() {
+                if !object.is_exact_instance_of::<PyInt>() && shape() != Shape::Int {
                     return Err(mismatch());
                 }
                 let value: i64 = object.extract().map_err(|_| mismatch())?;
@@ -557,19 +948,20 @@ impl Plans {
                 }
                 Ok(session.int(value))
             }
-            Type::Float => {
-                if let Ok(float) = object.cast::<PyFloat>() {
-                    Ok(session.float(float.value()))
-                } else if !is_bool && object.is_instance_of::<PyInt>() {
-                    // Today's SDK widens an int given for a float.
-                    let value: f64 = object.extract().map_err(|_| mismatch())?;
-                    Ok(session.float(value))
-                } else {
-                    Err(mismatch())
-                }
-            }
+            Type::Float => match if object.is_exact_instance_of::<PyFloat>() {
+                Shape::Float
+            } else {
+                shape()
+            } {
+                Shape::Float => Ok(session.float(object.cast::<PyFloat>()?.value())),
+                // Today's SDK widens an int only when the float is exactly it.
+                Shape::Int => exact_float(object)
+                    .map(|value| session.float(value))
+                    .ok_or_else(mismatch),
+                _ => Err(mismatch()),
+            },
             Type::Bool | Type::LiteralBool(_) => {
-                if !is_bool {
+                if !object.is_instance_of::<PyBool>() {
                     return Err(mismatch());
                 }
                 let value = object.is_truthy()?;
@@ -588,10 +980,10 @@ impl Plans {
                 }
             }
             Type::String | Type::LiteralString(_) => {
-                let text = object
-                    .cast::<PyString>()
-                    .map_err(|_| mismatch())?
-                    .to_str()?;
+                if !object.is_exact_instance_of::<PyString>() && shape() != Shape::Str {
+                    return Err(mismatch());
+                }
+                let text = object.cast::<PyString>()?.to_str()?;
                 if let Type::LiteralString(literal) = ty
                     && text != literal
                 {
@@ -599,44 +991,10 @@ impl Plans {
                 }
                 session.string(text).map_err(refused)
             }
-            Type::Class(number) => {
-                let class = self.class_py(py, *number)?;
-                if !object.is_instance(class.cls.bind(py))? {
-                    return Err(mismatch());
-                }
-                let TypeDefKind::Class { fields } = &self.def(*number)?.kind else {
-                    return Err(mismatch());
-                };
-                let dict = object.getattr(intern!(py, "__dict__"))?;
-                let dict = dict.cast::<PyDict>()?;
-                let mut values = Vec::with_capacity(fields.len());
-                for (field, attr) in fields.iter().zip(&class.attrs) {
-                    let attr = attr.bind(py);
-                    let item = match dict.get_item(attr)? {
-                        Some(item) => item,
-                        None => object.getattr(attr)?,
-                    };
-                    values.push(self.build(py, session, &field.ty, &item, depth + 1)?);
-                }
-                session.instance(*number, values).map_err(refused)
-            }
             Type::Enum(number) | Type::EnumVariant { of: number, .. } => {
-                let enumeration = self.enum_py(py, *number)?;
-                let index = match enumeration.index.get(&(object.as_ptr() as usize)) {
-                    Some(index) => *index,
-                    None => {
-                        // A member of an equal enum, or its value.
-                        let member = enumeration
-                            .cls
-                            .bind(py)
-                            .call1((object,))
-                            .map_err(|_| mismatch())?;
-                        *enumeration
-                            .index
-                            .get(&(member.as_ptr() as usize))
-                            .ok_or_else(mismatch)?
-                    }
-                };
+                let index = self
+                    .variant_of(py, *number, object, shape())
+                    .ok_or_else(mismatch)?;
                 if let Type::EnumVariant { index: wanted, .. } = ty
                     && index != *wanted
                 {
@@ -645,39 +1003,163 @@ impl Plans {
                 session.variant(*number, index).map_err(refused)
             }
             Type::List(element) => {
-                let items: Vec<Bound<'_, PyAny>> = if let Ok(list) = object.cast::<PyList>() {
-                    list.iter().collect()
-                } else if let Ok(tuple) = object.cast::<PyTuple>() {
-                    tuple.iter().collect()
-                } else {
+                if !object.is_exact_instance_of::<PyList>() && shape() != Shape::Seq {
                     return Err(mismatch());
-                };
-                let mut values = Vec::with_capacity(items.len());
-                for item in &items {
-                    values.push(self.build(py, session, element, item, depth + 1)?);
+                }
+                let mut values = Vec::with_capacity(object.len().unwrap_or(0));
+                if let Ok(list) = object.cast::<PyList>() {
+                    for item in list.iter() {
+                        values.push(self.build(py, session, element, &item, depth + 1)?);
+                    }
+                } else {
+                    for item in object.try_iter()? {
+                        values.push(self.build(py, session, element, &item?, depth + 1)?);
+                    }
                 }
                 session.array(values).map_err(refused)
             }
             Type::Map(inner) => {
-                let dict = object.cast::<PyDict>().map_err(|_| mismatch())?;
-                let mut entries = Vec::with_capacity(dict.len());
-                for (key, item) in dict.iter() {
+                if !object.is_exact_instance_of::<PyDict>() && shape() != Shape::Dict {
+                    return Err(mismatch());
+                }
+                // A snapshot of the entries, as today's encoder walks
+                // `items()`: code run while a value is read may change the
+                // dict.
+                let items = object.cast::<PyDict>()?.items();
+                let mut entries = Vec::with_capacity(items.len());
+                for item in items.iter() {
+                    let (key, value) = item_pair(&item)?;
                     let key = key
                         .cast::<PyString>()
                         .map_err(|_| PyTypeError::new_err("a map's keys must be strings"))?
                         .to_str()?
                         .to_owned();
                     let key = session.string(&key).map_err(refused)?;
-                    entries.push((key, self.build(py, session, inner, &item, depth + 1)?));
+                    entries.push((key, self.build(py, session, inner, &value, depth + 1)?));
                 }
                 session.map(entries).map_err(refused)
             }
-            Type::Union(members) => {
-                let member = self.pick(py, ty, members, object)?;
-                self.build(py, session, member, object, depth)
+            Type::Class(number) => {
+                let class = self.class_py(py, *number)?;
+                // An instance of the class, the usual case, first.
+                let source = if object.is_instance(class.cls.bind(py))? {
+                    Source::Instance {
+                        object: object.clone(),
+                        dict: object
+                            .getattr(intern!(py, "__dict__"))?
+                            .cast_into::<PyDict>()?,
+                    }
+                } else {
+                    self.source(py, *number, object, shape())?
+                        .ok_or_else(mismatch)?
+                };
+                let TypeDefKind::Class { fields } = &self.def(*number)?.kind else {
+                    return Err(mismatch());
+                };
+                let mut values = Vec::with_capacity(fields.len());
+                for (slot, field) in fields.iter().enumerate() {
+                    values.push(
+                        match Self::field_value(py, class, &field.name, slot, &source)? {
+                            Some(value) => self.build(py, session, &field.ty, &value, depth + 1)?,
+                            None if nullable(&field.ty) => session.null(),
+                            None => {
+                                return Err(PyTypeError::new_err(format!(
+                                    "{} has no field {:?} of `{}`",
+                                    describe(object),
+                                    field.name,
+                                    self.type_name(ty)
+                                )));
+                            }
+                        },
+                    );
+                }
+                session.instance(*number, values).map_err(refused)
             }
         }
     }
+}
+
+/// What a Python value is, one level down, for the walk.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Shape {
+    Null,
+    /// A member of an `enum.Enum`, whatever it mixes in.
+    Member,
+    Bool,
+    Int,
+    Float,
+    Str,
+    /// A `list` or a `tuple`.
+    Seq,
+    Dict,
+    Object,
+}
+
+/// How a value's shape stands to a union member, best first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Rank {
+    Identity,
+    Natural,
+    Conversion,
+}
+
+enum Choice<'t> {
+    One(&'t Type, u32),
+    Unfit,
+    Ambiguous,
+}
+
+enum Source<'py> {
+    Instance {
+        object: Bound<'py, PyAny>,
+        dict: Bound<'py, PyDict>,
+    },
+    Mapping(Bound<'py, PyDict>),
+}
+
+fn too_deep() -> PyErr {
+    PyTypeError::new_err(format!(
+        "an argument nested too deeply: more than {MAX_DEPTH} levels"
+    ))
+}
+
+/// Whether `ty` admits `null`.
+fn nullable(ty: &Type) -> bool {
+    match ty {
+        Type::Null => true,
+        Type::Union(members) => members.iter().any(nullable),
+        _ => false,
+    }
+}
+
+/// The same type, unions compared as sets.
+fn equivalent(a: &Type, b: &Type) -> bool {
+    match (a, b) {
+        (Type::Union(left), Type::Union(right)) => {
+            left.iter().all(|l| right.iter().any(|r| equivalent(l, r)))
+                && right.iter().all(|r| left.iter().any(|l| equivalent(l, r)))
+        }
+        (Type::List(left), Type::List(right)) | (Type::Map(left), Type::Map(right)) => {
+            equivalent(left, right)
+        }
+        _ => a == b,
+    }
+}
+
+/// A Python `int` as the `float` that is exactly it, if there is one.
+fn exact_float(object: &Bound<'_, PyAny>) -> Option<f64> {
+    if let Ok(int) = object.extract::<i64>() {
+        #[expect(clippy::cast_precision_loss, reason = "checked to be exact just below")]
+        let float = int as f64;
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a finite float back to an integer"
+        )]
+        let back = float as i128;
+        return (back == i128::from(int)).then_some(float);
+    }
+    let float: f64 = object.extract().ok()?;
+    object.eq(float).ok()?.then_some(float)
 }
 
 /// Set an attribute as `object.__setattr__` does, skipping the class's own

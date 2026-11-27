@@ -38,16 +38,42 @@ def pytest_collection_modifyitems(config, items):
                 break
 
 
+def pytest_configure(config):
+    """`BAML_NATIVE_MODEL_MODE` picks how the native module makes models, so
+    today's tests can run in each mode."""
+    mode = os.environ.get("BAML_NATIVE_MODEL_MODE")
+    if mode and _native():
+        import baml_native
+
+        baml_native.set_model_mode(mode)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item):
+    """Note every call the test made to a function the library does not
+    export (`baml_native` stubs record them)."""
+    native = _native()
+    if native:
+        import baml_native
+
+        baml_native._refused_calls.clear()
+    yield
+    if native:
+        item._baml_refused = sorted(set(baml_native._refused_calls))
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """A test that calls a function the packer refused is skipped, with the
-    refusal: these are the tests that use only functions that do not pack."""
+    """A test that called a function the library does not export is a skip,
+    whatever it caught and however it ended: the library's interface says
+    which functions those are, not an error's text."""
     outcome = yield
     report = outcome.get_result()
-    if (
-        call.excinfo is not None
-        and call.excinfo.errisinstance(NotImplementedError)
-        and "not in the native library" in str(call.excinfo.value)
-    ):
+    refused = getattr(item, "_baml_refused", None)
+    if call.when == "call" and refused:
         report.outcome = "skipped"
-        report.longrepr = (str(item.path), item.location[1] or 0, f"Skipped: {call.excinfo.value}")
+        report.longrepr = (
+            str(item.path),
+            item.location[1] or 0,
+            f"Skipped: calls {', '.join(refused)}, not in the native library (the packer refused it)",
+        )
