@@ -12426,6 +12426,35 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    /// The widened throw facts `ty` stands for once its type aliases are
+    /// expanded, through unions and nested aliases. A leaf that is not an
+    /// alias is its own fact. An alias that does not resolve, or that
+    /// recurs through itself, contributes nothing past the first visit.
+    fn alias_member_facts(&self, ty: &baml_type::Ty) -> std::collections::BTreeSet<baml_type::Ty> {
+        fn visit(
+            facts: &Facts<'_>,
+            ty: &baml_type::Ty,
+            seen: &mut FxHashSet<baml_type::Ty>,
+            out: &mut std::collections::BTreeSet<baml_type::Ty>,
+        ) {
+            for leaf in crate::throw_facts::flatten_declared_ty_to_facts(ty) {
+                let baml_type::Ty::TypeAlias(name) = &leaf else {
+                    out.insert(leaf);
+                    continue;
+                };
+                if seen.insert(leaf.clone())
+                    && let Some(target) = baml_type::normalize::TypeContext::alias_def(facts, name)
+                {
+                    visit(facts, &target, seen, out);
+                }
+            }
+        }
+
+        let mut out = std::collections::BTreeSet::new();
+        visit(&self.facts, ty, &mut FxHashSet::default(), &mut out);
+        out
+    }
+
     /// E0097 judges only explicit, closed clauses, at their body roots.
     /// Contextual expectations constrain effects but do not claim coverage.
     fn judge_throws_contract_coverage(&mut self, contract: ThrowsContract) {
@@ -12502,19 +12531,37 @@ impl<'db> InferenceContext<'db> {
                 return;
             }
         }
+        // A thrown value typed by an alias (a rethrown `e: SendError`)
+        // covers the members the alias stands for.
+        let effective_members: std::collections::BTreeSet<baml_type::Ty> = effective
+            .iter()
+            .flat_map(|fact| self.alias_member_facts(fact))
+            .collect();
+        let leaf_covered = |leaf: &baml_type::Ty| {
+            effective.contains(leaf)
+                || effective_members.contains(leaf)
+                || relaxed.contains(leaf)
+                || matches!(leaf, baml_type::Ty::Interface(..))
+                    && effective
+                        .iter()
+                        .any(|eff| baml_type::normalize::is_subtype(eff, leaf, &self.facts))
+        };
         // A meaningful `unknown` (including aliases) is not extraneous,
         // but uncovered named members of its union still are.
         let mut extra_types: Vec<String> = declared_facts
             .iter()
             .filter(|decl| {
-                let covered = crate::throw_facts::flatten_declared_ty_to_facts(decl)
-                    .iter()
-                    .all(|w| effective.contains(w) || relaxed.contains(w));
-                !(covered
-                    || matches!(decl, baml_type::Ty::Interface(..))
-                        && effective
-                            .iter()
-                            .any(|eff| baml_type::normalize::is_subtype(eff, decl, &self.facts)))
+                let covered = if matches!(decl, baml_type::Ty::TypeAlias(..)) {
+                    // A clause names an alias to share one error set across
+                    // functions, so the alias is judged as written: it is
+                    // extraneous only when nothing it stands for is thrown.
+                    self.alias_member_facts(decl).iter().any(&leaf_covered)
+                } else {
+                    crate::throw_facts::flatten_declared_ty_to_facts(decl)
+                        .iter()
+                        .all(&leaf_covered)
+                };
+                !covered
             })
             .filter(|ty| {
                 !is_open_contract

@@ -4,18 +4,18 @@ source: crates/baml_tests/src/corpus.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0097
 
-  ⚠ extraneous throws declaration: Errors
-    ╭─[throw_context.baml:37:45]
- 37 │ ╭─▶ function throwAlias() -> void throws Errors {
- 38 │ │       throw [];
- 39 │ ╰─▶ }
-    ╰────
-
-  [type] E0097
-
   ⚠ extraneous throws declaration: string
     ╭─[throw_context.baml:41:60]
  41 │ ╭─▶ function throwBranch(n: int) -> void throws int[] | string {
  42 │ │       throw if (n == 0) { [] } else { [n] };
  43 │ ╰─▶ }
     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: SendError
+     ╭─[throw_context.baml:169:55]
+ 169 │ ╭─▶ function throwNoAliasMember() -> int throws SendError {
+ 170 │ │       1
+ 171 │ ╰─▶ }
+     ╰────

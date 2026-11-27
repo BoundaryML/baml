@@ -129,3 +129,67 @@ test "throw_context_preserves_inferred_and_open_effects" {
     };
     assert.equal(open, "other")
 }
+
+class BaseError {
+    code: string,
+}
+
+class LimitError {
+    code: string,
+}
+
+type SendError = BaseError | LimitError;
+
+function throwAliasMembers(x: int) -> int throws SendError {
+    if (x < 0) {
+        throw BaseError { code: "negative" };
+    }
+    if (x > 9) {
+        throw LimitError { code: "limit" };
+    }
+    x
+}
+
+function rethrowAliasMembers(x: int) -> int throws SendError {
+    if (x > 99) {
+        throw LimitError { code: "far" };
+    }
+    throwAliasMembers(x) catch (e) {
+        _ => {
+            throw e;
+        },
+    }
+}
+
+function throwOneAliasMember() -> int throws SendError {
+    throw LimitError { code: "one" };
+}
+
+// Throws nothing the alias stands for, so E0097 names the alias.
+function throwNoAliasMember() -> int throws SendError {
+    1
+}
+
+test "throw_context_union_alias_members" {
+    let base = throwAliasMembers(-1) catch (e) {
+        BaseError => e.code,
+        LimitError => "wrong",
+    };
+    assert.equal(base, "negative")
+    let limit = rethrowAliasMembers(10) catch (e) {
+        BaseError => "wrong",
+        LimitError => e.code,
+    };
+    assert.equal(limit, "limit")
+    let far = rethrowAliasMembers(100) catch (e) {
+        BaseError => "wrong",
+        LimitError => e.code,
+    };
+    assert.equal(far, "far")
+    let one = throwOneAliasMember() catch (e) {
+        BaseError => "wrong",
+        LimitError => e.code,
+    };
+    assert.equal(one, "one")
+    assert.equal(throwNoAliasMember(), 1)
+}
