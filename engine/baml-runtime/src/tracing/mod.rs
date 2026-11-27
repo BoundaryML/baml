@@ -62,6 +62,22 @@ pub struct TracingCall {
     pub function_type: FunctionType,
 }
 
+/// Releases a ref on a call in BAML_TRACER when dropped, also when a panic
+/// unwinds the stack.
+struct TemporaryTracerRef(baml_ids::FunctionCallId);
+
+impl Drop for TemporaryTracerRef {
+    fn drop(&mut self) {
+        match BAML_TRACER.lock() {
+            Ok(mut tracer) => tracer.dec_ref(&self.0),
+            // A second panic during an unwind aborts the process. Keep the ref:
+            // a poisoned tracer is broken anyway.
+            Err(_) if std::thread::panicking() => {}
+            Err(e) => panic!("BAML_TRACER is poisoned: {e}"),
+        }
+    }
+}
+
 impl TracingCall {
     pub fn curr_call_id(&self) -> baml_ids::FunctionCallId {
         self.new_call_id_stack
@@ -136,6 +152,108 @@ mod tests {
             truncate_string(r#"👍👍👍👍👍👍👍"#, 4),
             format!(r#"👍{}👍👍"#, log_str())
         );
+    }
+
+    /// A collector must not expose a call id before the FunctionStart event of
+    /// that call is stored: reading such a log panics (GitHub issue #3424).
+    /// A large param makes the param conversion in `start_call` slow, so a
+    /// reader thread that polls the collector hits any window between "call id
+    /// tracked" and "FunctionStart stored". The reader checks the stored events
+    /// directly, so this test never panics while it holds BAML_TRACER.
+    #[test]
+    #[serial_test::serial]
+    fn test_start_call_stores_function_start_before_collector_sees_id() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let tracer = BamlTracer::new(None, std::iter::empty::<(&str, &str)>()).unwrap();
+        let ctx = RuntimeContextManager::new(None);
+        let collector = Arc::new(Collector::new(Some("test_collector".to_string())));
+
+        let items = (0..200_000)
+            .map(|i| BamlValue::String(format!("item-{i}")))
+            .collect();
+        let mut params = BamlMap::new();
+        params.insert("items".to_string(), BamlValue::List(items));
+
+        let done = Arc::new(AtomicBool::new(false));
+        let reader = {
+            let collector = collector.clone();
+            let done = done.clone();
+            std::thread::spawn(move || {
+                let mut ids_without_start = 0usize;
+                while !done.load(Ordering::Acquire) {
+                    for log in collector.function_logs() {
+                        let tracer = BAML_TRACER.lock().unwrap();
+                        let has_start = tracer.get_events(&log.id()).is_some_and(|events| {
+                            events
+                                .iter()
+                                .any(|e| matches!(e.content, TraceData::FunctionStart(_)))
+                        });
+                        if !has_start {
+                            ids_without_start += 1;
+                        }
+                    }
+                }
+                ids_without_start
+            })
+        };
+
+        for _ in 0..5 {
+            tracer.start_call(
+                "TestFunction",
+                &ctx,
+                &params,
+                true,
+                false,
+                Some(vec![collector.clone()]),
+                None,
+            );
+            ctx.exit();
+        }
+
+        done.store(true, Ordering::Release);
+        let ids_without_start = reader.join().unwrap();
+        assert_eq!(
+            ids_without_start, 0,
+            "a collector exposed a call id without a FunctionStart event"
+        );
+        assert_eq!(collector.function_logs().len(), 5);
+    }
+
+    /// `start_call` holds a temporary ref on the call while the collectors
+    /// track it. When a collector panics there, the ref must still be
+    /// released, or the call's events stay in BAML_TRACER forever.
+    #[test]
+    #[serial_test::serial]
+    fn test_start_call_releases_temporary_ref_when_collector_panics() {
+        let tracer = BamlTracer::new(None, std::iter::empty::<(&str, &str)>()).unwrap();
+        let ctx = RuntimeContextManager::new(None);
+        let collector = Arc::new(Collector::new(Some("poisoned_collector".to_string())));
+        collector.poison_for_test();
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            tracer.start_call(
+                "TestFunction",
+                &ctx,
+                &BamlMap::new(),
+                true,
+                false,
+                Some(vec![collector.clone()]),
+                None,
+            )
+        }));
+        assert!(
+            result.is_err(),
+            "track_function on a poisoned collector panics"
+        );
+
+        // `start_call` panicked before `ctx.exit()`, so the call is still on the stack.
+        let call_id = ctx.call_id_stack(false).unwrap().pop().unwrap();
+        ctx.exit();
+        let leaked = BAML_TRACER.lock().unwrap().get_events(&call_id).is_some();
+        // Dropping the collector would panic on its poisoned lock.
+        std::mem::forget(collector);
+        assert!(!leaked, "the temporary ref on the call was not released");
     }
 }
 
@@ -454,14 +572,6 @@ impl BamlTracer {
         // println!("---- {} ctx {:#?}", function_name, ctx);
         // baml_log::info!("---- {} ctx {:#?}", function_name, ctx);
 
-        // This must happen before the first event is sent.
-        if let Some(collectors) = collectors {
-            // log::debug!("collectors: {:#?}", collectors);
-            for collector in collectors.iter() {
-                collector.track_function(call.curr_call_id());
-            }
-        }
-
         // Add function start trace event
         // log::info!("Creating trace event for {}", function_name);
         let trace_event = TraceEvent::new_function_start(
@@ -481,7 +591,31 @@ impl BamlTracer {
             function_type,
             is_stream,
         );
-        BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+        let trace_event = Arc::new(trace_event);
+
+        match collectors {
+            Some(collectors) if !collectors.is_empty() => {
+                let call_id = call.curr_call_id();
+                // `put` drops events of untracked calls, so the call must be
+                // tracked before the first event is sent. But another thread can
+                // read a collector's logs at any time, and a log without a
+                // FunctionStart event panics. So we store FunctionStart under a
+                // temporary ref first, and only then let the collectors track the
+                // call.
+                let _temporary_ref = {
+                    let mut tracer = BAML_TRACER.lock().unwrap();
+                    tracer.inc_ref(&call_id);
+                    tracer.put(trace_event);
+                    TemporaryTracerRef(call_id.clone())
+                };
+                for collector in collectors.iter() {
+                    collector.track_function(call_id.clone());
+                }
+            }
+            _ => {
+                BAML_TRACER.lock().unwrap().put(trace_event);
+            }
+        }
 
         call
     }
