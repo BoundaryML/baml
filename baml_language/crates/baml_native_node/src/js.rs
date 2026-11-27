@@ -295,12 +295,55 @@ pub(crate) fn call(env: Env, function: Value, args: &[Value]) -> JsResult<Value>
     Ok(value)
 }
 
-/// A strong reference: keeps `value` alive for the life of the process.
+/// A strong reference: keeps `value` alive until [`unreference`].
 pub(crate) fn reference(env: Env, value: Value) -> Ref {
     let mut reference = ptr::null_mut();
     // SAFETY: as above.
     unsafe { sys::napi_create_reference(env, value, 1, &raw mut reference) };
     reference
+}
+
+pub(crate) fn unreference(env: Env, reference: Ref) {
+    // SAFETY: a live reference made in this env, deleted once.
+    unsafe { sys::napi_delete_reference(env, reference) };
+}
+
+pub(crate) fn global(env: Env) -> Value {
+    let mut value = ptr::null_mut();
+    // SAFETY: an env of the current call.
+    unsafe { sys::napi_get_global(env, &raw mut value) };
+    value
+}
+
+/// The prototype of an object.
+#[track_caller]
+pub(crate) fn prototype(env: Env, object: Value) -> JsResult<Value> {
+    let mut value = ptr::null_mut();
+    // SAFETY: as above.
+    check(env, unsafe {
+        sys::napi_get_prototype(env, object, &raw mut value)
+    })?;
+    Ok(value)
+}
+
+/// Whether `object` has an own property `key` (a proxy's trap may throw).
+#[track_caller]
+pub(crate) fn has_own(env: Env, object: Value, key: Value) -> JsResult<bool> {
+    let mut result = false;
+    // SAFETY: as above.
+    check(env, unsafe {
+        sys::napi_has_own_property(env, object, key, &raw mut result)
+    })?;
+    Ok(result)
+}
+
+/// A `bigint` as an `i64`, when it is one exactly.
+pub(crate) fn get_bigint_i64(env: Env, value: Value) -> Option<i64> {
+    let (mut n, mut lossless) = (0_i64, false);
+    // SAFETY: as above; `value` is a bigint.
+    let status =
+        unsafe { sys::napi_get_value_bigint_int64(env, value, &raw mut n, &raw mut lossless) };
+    (status == sys::Status::napi_ok && lossless).then_some(n)
 }
 
 pub(crate) fn deref(env: Env, reference: Ref) -> Value {

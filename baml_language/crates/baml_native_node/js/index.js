@@ -66,6 +66,25 @@ export class BamlPanic extends BamlError {
   }
 }
 
+/** The codes of the errors the addon itself raises. */
+const NATIVE_CODES = new Set(["reentrant", "other_environment"]);
+
+/**
+ * An error the addon raised about the bridge itself (re-entry, another
+ * environment) becomes a `BamlClientError`, keeping its `code`. Anything
+ * else is passed on as it is: what a constructor or a getter threw, and a
+ * refused argument, which is a plain `Error` with the code `InvalidArg` as
+ * in today's bridge. The async and the `_sync` form both use it, so they
+ * surface the same error.
+ */
+function fromNative(err) {
+  if (err instanceof BamlError || err === null || typeof err !== "object") return err;
+  if (!NATIVE_CODES.has(err.code)) return err;
+  const wrapped = new BamlClientError(err.message);
+  wrapped.code = err.code;
+  return wrapped;
+}
+
 export function wrapNativeError(err) {
   if (err instanceof BamlError) return err;
   const message = err instanceof Error ? err.message : String(err);
@@ -194,7 +213,21 @@ const exportsByName = new Map();
  * `initializeRuntimeFromBlob`.
  */
 export function initializeNativeLibrary(path, interfaceHash) {
-  addon.load(path, interfaceHash, scheduleTurn);
+  // One runtime per thread: a second copy of this module (a duplicated
+  // package) would take turns, and so the events, of the first.
+  const owner = globalThis[RUNTIME];
+  if (owner !== undefined && owner !== THIS_RUNTIME) {
+    throw new BamlClientError(
+      "a second copy of the native BAML runtime was loaded in this thread: generated SDKs " +
+        "must share one @boundaryml/baml-bridge",
+    );
+  }
+  try {
+    addon.load(path, interfaceHash, scheduleTurn);
+  } catch (err) {
+    throw fromNative(err);
+  }
+  globalThis[RUNTIME] = THIS_RUNTIME;
   loaded = true;
   exportsByName.clear();
   addon.functions().forEach(([name, params, defaults], index) => {
@@ -203,10 +236,22 @@ export function initializeNativeLibrary(path, interfaceHash) {
 }
 
 const EMPTY = Object.freeze({});
+/** Which copy of this module first loaded the library in this thread. */
+const RUNTIME = Symbol.for("baml.native.runtime");
+const THIS_RUNTIME = Object.freeze({});
+/**
+ * Set on each generated class's prototype to its number in the interface, so
+ * the addon tells an instance's class with one read.
+ */
+const CLASS_TAG = Symbol.for("baml.native.class");
+/** The prototypes tagged by the last bind, untagged by the next. */
+let tagged = [];
 
 /** Hand the addon each interface type's generated class or enum. */
 function bindTypes() {
   const types = addon.types();
+  for (const prototype of tagged) delete prototype[CLASS_TAG];
+  tagged = [];
   const constructors = [];
   const factories = [];
   const enumValues = [];
@@ -231,10 +276,32 @@ function bindTypes() {
     }
     constructors.push(C);
     enumValues.push(undefined);
+    if (typeof C === "function" && C.prototype && !Object.hasOwn(C.prototype, CLASS_TAG)) {
+      Object.defineProperty(C.prototype, CLASS_TAG, { value: constructors.length - 1, configurable: true });
+      tagged.push(C.prototype);
+    }
     factories.push(C === undefined ? undefined : makeFactory(C, names));
   }
-  addon.bind(constructors, factories, enumValues, () => Object.create(null), BUILD_MODE);
+  addon.bind(constructors, factories, enumValues, () => Object.create(null), BUILD_MODE, CLASS_TAG, describe);
   bound = true;
+}
+
+/**
+ * A short rendering of a value for an error message, as today's bridge
+ * writes it: a container by its size, never stringified whole.
+ */
+function describe(value) {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return `array of length ${value.length}`;
+  if (typeof value === "object") {
+    const name = value.constructor?.name ?? "object";
+    return name === "Object" ? `object with ${Object.keys(value).length} keys` : name;
+  }
+  if (typeof value === "function") return "function";
+  if (typeof value === "symbol") return "symbol";
+  let shown = typeof value === "string" ? JSON.stringify(value) : String(value);
+  if (shown.length > 48) shown = `${shown.slice(0, 48)}…`;
+  return `${typeof value} ${shown}`;
 }
 
 /** A per-class function taking the field values in declaration order. */
@@ -352,7 +419,7 @@ function callError(status, payload) {
     case STATUS_HOST_THREW:
       return payload;
     case STATUS_DECODE:
-      return new BamlError(`unexpected value from BAML: ${payload}`);
+      return new BamlError(payload);
     default:
       return new BamlError(`a call ended with status ${status}`);
   }
@@ -510,24 +577,17 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
         if (!bound) ready();
         return startAsync(t.index, argsOf(t, args));
       } catch (err) {
-        return Promise.reject(err instanceof BamlError || err instanceof TypeError ? err : wrapNativeError(err));
+        return Promise.reject(fromNative(err));
       }
     };
   }
   return (...args) => {
-    let t;
-    let built;
     try {
-      t = target ?? resolve();
+      const t = target ?? resolve();
       if (!bound) ready();
-      built = argsOf(t, args);
+      return callSync(t.index, argsOf(t, args));
     } catch (err) {
-      throw err instanceof BamlError || err instanceof TypeError ? err : wrapNativeError(err);
-    }
-    try {
-      return callSync(t.index, built);
-    } catch (err) {
-      throw err instanceof Error && !("code" in err) ? err : wrapNativeError(err);
+      throw fromNative(err);
     }
   };
 }

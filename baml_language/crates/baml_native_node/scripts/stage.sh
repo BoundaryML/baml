@@ -19,8 +19,10 @@ mkdir -p "$SRC/ns_bridge_test"
 cp crates/baml_native_node/fixture/bridge_test.baml "$SRC/ns_bridge_test/types.baml"
 
 # Every function that packs; the ones that do not are listed with why.
-target/release/examples/native_pack --lib "$SRC" "$OUT/libtype_shapes.dylib" 2> "$OUT/skipped.txt"
-target/release/examples/native_pack --lib "$SRC" "$OUT/unused.dylib" --describe 2>/dev/null > "$OUT/interface.json"
+# The two runs read the same sources and write different files: together.
+target/release/examples/native_pack --lib "$SRC" "$OUT/libtype_shapes.dylib" 2> "$OUT/skipped.txt" &
+target/release/examples/native_pack --lib "$SRC" "$OUT/unused.dylib" --describe 2>/dev/null > "$OUT/interface.json" &
+wait %1 && wait %2
 HASH=0x$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).interface_hash' "$OUT/interface.json")
 echo "interface hash $HASH; $(wc -l < "$OUT/skipped.txt" | tr -d ' ') functions skipped (see $OUT/skipped.txt)"
 
@@ -33,5 +35,6 @@ BAML_GIT_SHA=$BRIDGE_GIT_SHA cargo run --release -q -p baml_native_node --exampl
 
 export npm_config_store_dir="$PWD/target/pnpm-store"
 for side in today native; do
-  (cd "$OUT/$side" && pnpm install --ignore-workspace --ignore-scripts --silent)
+  (cd "$OUT/$side" && pnpm install --ignore-workspace --ignore-scripts --silent) &
 done
+wait %1 && wait %2

@@ -102,3 +102,94 @@ function spawn_sleeper() -> int {
 function divide(a: int, b: int) -> int {
   a / b
 }
+
+// Added after the review of the Node bridge.
+
+// Starts a task that reads the environment two thousand times, and returns
+// at once: I/O in flight while Node's process exits.
+function spawn_reader() -> int {
+  let t = spawn { read_env(2000) };
+  1
+}
+
+function read_env(n: int) -> int {
+  let found = 0;
+  for (let i = 0; i < n; i += 1) {
+    if (baml.env.get("PATH") != null) { found += 1; }
+  }
+  found
+}
+
+class Chain {
+  value int
+  next Chain?
+}
+
+function make_chain(n: int) -> Chain {
+  let c = Chain { value: 0, next: null };
+  for (let i = 1; i < n; i += 1) {
+    c = Chain { value: i, next: c };
+  }
+  c
+}
+
+function round_trip_chain(c: Chain) -> Chain {
+  c
+}
+
+// The same fields as Point, another class.
+class Pair {
+  x int
+  y int
+}
+
+function round_trip_point(p: Point) -> Point {
+  p
+}
+
+enum Mood {
+  Happy
+  Sad
+}
+
+class Note {
+  text string
+  meta string?
+}
+
+class Tag {
+  text string
+}
+
+// Which member of a union an argument became.
+function mood_or_text(v: Mood | string) -> string {
+  match (v) {
+    let m: Mood => "enum",
+    let t: string => "string",
+  }
+}
+
+function float_or_literal(v: float | 1 | 2) -> string {
+  match (v) {
+    let f: float => "float",
+    let i: int => "int",
+  }
+}
+
+function point_or_map(v: Point | map<string, int>) -> string {
+  match (v) {
+    let p: Point => "class",
+    let m: map<string, int> => "map",
+  }
+}
+
+function note_or_tag(v: Note | Tag) -> string {
+  match (v) {
+    let n: Note => "note",
+    let t: Tag => "tag",
+  }
+}
+
+function count_map(m: map<string, int>) -> int {
+  m.length()
+}

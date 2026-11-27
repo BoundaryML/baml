@@ -10,8 +10,9 @@
 //! `bridge_test` added (`scripts/stage.sh`). Writes `<out>/today` and
 //! `<out>/native`, each a package with the generated SDK under
 //! `node/baml_sdk`, today's tests for the fixture, the bench (`js/bench`,
-//! compiled to `dist/` by `tsconfig.dist.json`), and in the native package
-//! this crate's own tests (`js/test`).
+//! compiled to `dist/` by `tsconfig.dist.json`), the argument-parity tests
+//! (`js/parity`), and in the native package this crate's own tests
+//! (`js/test`).
 //!
 //! What the native copy changes in the generated files, and nothing else:
 //!
@@ -61,6 +62,7 @@ fn main() {
     let templates = workspace.join("sdk_tests/codegen/src/templates");
     let own_tests = workspace.join("crates/baml_native_node/js/test");
     let bench = workspace.join("crates/baml_native_node/js/bench");
+    let parity = workspace.join("crates/baml_native_node/js/parity");
     for side in ["today", "native"] {
         let package = out.join(side);
         let sdk = package.join("node/baml_sdk");
@@ -76,6 +78,7 @@ fn main() {
         if side == "native" {
             copy_dir(&own_tests, &package.join("node"));
         }
+        copy_dir(&parity, &package.join("node"));
         for file in ["bench.ts", "bench_values.ts"] {
             fs::copy(bench.join(file), package.join("node").join(file)).expect("the bench");
         }

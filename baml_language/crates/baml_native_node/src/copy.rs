@@ -18,7 +18,10 @@ use std::collections::HashMap;
 use baml_native_host::{BamlValue, Interface, Library, SdkError, Session, Type, TypeDefKind, tag};
 use napi_sys::ValueType;
 
-use crate::js::{self, Env, JsResult, Ref, Thrown, Value};
+use crate::{
+    args::{ArgError, MAX_DEPTH, Walk, is_inherited_name},
+    js::{self, Env, JsResult, Ref, Thrown, Value},
+};
 
 /// How a class instance becomes a JavaScript object (`bind`'s `mode`).
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -68,19 +71,24 @@ impl Out {
     }
 }
 
-struct FieldPlan {
-    name: String,
+pub(crate) struct FieldPlan {
+    pub(crate) name: String,
     /// The field's name as a JavaScript string, kept alive.
-    key: Ref,
-    ty: Type,
+    pub(crate) key: Ref,
+    pub(crate) ty: Type,
     out: Out,
-    nullable: bool,
+    pub(crate) nullable: bool,
+    /// Object.prototype has a property of this name: the field is read only
+    /// when it is the object's own.
+    pub(crate) inherited_name: bool,
 }
 
-enum TypePlan {
+pub(crate) enum TypePlan {
     Class {
         name: String,
         fields: Vec<FieldPlan>,
+        /// Each field's place, by name.
+        field_index: HashMap<String, usize>,
         /// The generated class, if the type map has it.
         constructor: Option<Ref>,
         /// The per-class factory of the build mode, if it uses one.
@@ -103,17 +111,37 @@ struct FunctionPlan {
 
 pub(crate) struct Plans {
     functions: Vec<FunctionPlan>,
-    types: Vec<TypePlan>,
+    pub(crate) types: Vec<TypePlan>,
     /// `() => Object.create(null)`.
     make_map: Ref,
+    /// The symbol `bind` sets on each generated class's prototype, to that
+    /// class's number in the interface.
+    pub(crate) class_tag: Ref,
+    /// This realm's `Object.prototype`.
+    pub(crate) object_prototype: Ref,
+    /// Today's bridge's short rendering of a JavaScript value for an error
+    /// message (`object with 2 keys`, `string "x"`, `Pair`).
+    describe: Ref,
 }
 
 /// Why a copy out failed.
 pub(crate) enum CopyError {
     /// JavaScript threw (a constructor): what it threw.
     Js(Value),
-    /// The value did not have the shape its type says.
+    /// The value did not have the shape its type says, or nests deeper than
+    /// [`MAX_DEPTH`]: why.
     Decode(String),
+}
+
+/// A result that does not have the shape its type says.
+fn decode(why: &str) -> CopyError {
+    CopyError::Decode(format!("unexpected value from BAML: {why}"))
+}
+
+fn too_deep() -> CopyError {
+    CopyError::Decode(format!(
+        "the result is nested too deeply for the boundary, which carries {MAX_DEPTH} levels"
+    ))
 }
 
 impl From<Thrown> for CopyError {
@@ -128,19 +156,6 @@ impl From<SdkError> for CopyError {
     }
 }
 
-/// Why an argument could not be built.
-enum ArgError {
-    Js(Value),
-    /// Where, and why, as in ``argument `x`.inner: expected int, found a string``.
-    Unfit(String),
-}
-
-impl From<Thrown> for ArgError {
-    fn from(thrown: Thrown) -> Self {
-        Self::Js(thrown.0)
-    }
-}
-
 fn admits_null(ty: &Type) -> bool {
     match ty {
         Type::Null => true,
@@ -151,7 +166,7 @@ fn admits_null(ty: &Type) -> bool {
 
 /// The name of an interface type as the typemap and today's errors spell
 /// it: user code lives under `user.`.
-fn user_name(name: &str) -> String {
+pub(crate) fn user_name(name: &str) -> String {
     format!("user.{name}")
 }
 
@@ -220,6 +235,7 @@ impl Plans {
     /// Plans for every export and every type of `library`'s interface.
     /// `constructors[n]`, `factories[n]` and `enum_values[n]` are what
     /// JavaScript has for interface type `n`.
+    #[expect(clippy::too_many_arguments, reason = "bind's arguments, one each")]
     pub(crate) fn build(
         env: Env,
         library: &Library,
@@ -228,6 +244,8 @@ impl Plans {
         enum_values: Value,
         make_map: Value,
         mode: u64,
+        class_tag: Value,
+        describe: Value,
     ) -> JsResult<Self> {
         let interface: &Interface = library.interface();
         let build = match mode {
@@ -249,7 +267,13 @@ impl Plans {
                             ty: field.ty.clone(),
                             out: Out::of(&field.ty),
                             nullable: admits_null(&field.ty),
+                            inherited_name: is_inherited_name(&field.name),
                         })
+                        .collect(),
+                    field_index: fields
+                        .iter()
+                        .enumerate()
+                        .map(|(i, field)| (field.name.clone(), i))
                         .collect(),
                     constructor: optional_ref(env, constructors, number)?,
                     factory: if build == Build::SetProperties {
@@ -305,11 +329,51 @@ impl Plans {
                 result: Out::of(&function.result),
             })
             .collect();
+        let global = js::global(env);
+        let object = js::get_named(env, global, c"Object")?;
+        let object_prototype = js::get_named(env, object, c"prototype")?;
         Ok(Self {
             functions,
             types,
             make_map: js::reference(env, make_map),
+            class_tag: js::reference(env, class_tag),
+            object_prototype: js::reference(env, object_prototype),
+            describe: js::reference(env, describe),
         })
+    }
+
+    /// Delete every reference the plans hold: they are being replaced.
+    pub(crate) fn release(self, env: Env) {
+        for plan in self.types {
+            match plan {
+                TypePlan::Class {
+                    fields,
+                    constructor,
+                    factory,
+                    ..
+                } => {
+                    for field in fields {
+                        js::unreference(env, field.key);
+                    }
+                    for reference in [constructor, factory].into_iter().flatten() {
+                        js::unreference(env, reference);
+                    }
+                }
+                TypePlan::Enum { values, .. } => {
+                    for value in values {
+                        js::unreference(env, value);
+                    }
+                }
+            }
+        }
+        for reference in [
+            self.make_map,
+            self.class_tag,
+            self.object_prototype,
+            self.describe,
+        ] {
+            js::unreference(env, reference);
+        }
     }
 
     // ---- results ---------------------------------------------------------
@@ -325,43 +389,60 @@ impl Plans {
             .functions
             .get(export as usize)
             .map_or(&Out::Dynamic, |function| &function.result);
-        self.copy(env, out, value)
+        self.copy(env, out, value, 0)
     }
 
-    fn copy(&self, env: Env, out: &Out, value: &BamlValue<'_>) -> Result<Value, CopyError> {
+    fn copy(
+        &self,
+        env: Env,
+        out: &Out,
+        value: &BamlValue<'_>,
+        depth: usize,
+    ) -> Result<Value, CopyError> {
         Ok(match out {
             Out::Int => int_value(env, value)?,
             Out::Float => js::number(env, value.float()?),
             Out::Bool => js::boolean(env, value.bool()?),
             Out::Null => js::null(env),
             Out::String => js::string(env, &value.string()?),
-            Out::Class(class) => self.copy_class(env, *class, value)?,
+            Out::Class(class) => self.copy_class(env, *class, value, depth + 1)?,
             Out::Enum(of) => self.copy_enum(env, *of, value)?,
             Out::List(element_out) => {
+                if depth >= MAX_DEPTH {
+                    return Err(too_deep());
+                }
                 let elements = value.elements()?;
                 let (length, _) = elements.size_hint();
                 let array = js::array(env, length);
                 for (i, element) in elements.enumerate() {
-                    let element = self.copy(env, element_out, &element?)?;
+                    let element = self.copy(env, element_out, &element?, depth + 1)?;
                     js::set_element(env, array, js::index(i), element)?;
                 }
                 array
             }
             Out::Map(entry) => {
+                if depth >= MAX_DEPTH {
+                    return Err(too_deep());
+                }
                 let map = js::call(env, js::deref(env, self.make_map), &[])?;
                 for (key, item) in value.entries()? {
                     let key = js::string(env, &key.string()?);
-                    let item = self.copy(env, entry, &item)?;
+                    let item = self.copy(env, entry, &item, depth + 1)?;
                     js::set_property(env, map, key, item)?;
                 }
                 map
             }
-            Out::Dynamic => self.copy_dynamic(env, value)?,
+            Out::Dynamic => self.copy_dynamic(env, value, depth)?,
         })
     }
 
     /// A value copied by its own tag.
-    fn copy_dynamic(&self, env: Env, value: &BamlValue<'_>) -> Result<Value, CopyError> {
+    fn copy_dynamic(
+        &self,
+        env: Env,
+        value: &BamlValue<'_>,
+        depth: usize,
+    ) -> Result<Value, CopyError> {
         let raw = value.raw();
         if raw.tag & tag::HANDLE == 0 {
             return Ok(match raw.tag {
@@ -369,13 +450,13 @@ impl Plans {
                 tag::BOOL => js::boolean(env, value.bool()?),
                 tag::INT => int_value(env, value)?,
                 tag::FLOAT => js::number(env, value.float()?),
-                other => return Err(CopyError::Decode(format!("a scalar of tag {other}"))),
+                other => return Err(decode(&format!("a scalar of tag {other}"))),
             });
         }
         Ok(match value.kind() {
             tag::STRING | tag::STRING_SLICE => js::string(env, &value.string()?),
             tag::INSTANCE => match value.class_of() {
-                Some(class) => self.copy_class(env, class, value)?,
+                Some(class) => self.copy_class(env, class, value, depth + 1)?,
                 // An instance of a class the interface does not describe
                 // (the standard library's): its text.
                 None => js::string(env, &value.describe()),
@@ -384,13 +465,22 @@ impl Plans {
                 Some(of) => self.copy_enum(env, of, value)?,
                 None => js::string(env, &value.describe()),
             },
-            tag::ARRAY => self.copy(env, &Out::List(Box::new(Out::Dynamic)), value)?,
-            tag::MAP => self.copy(env, &Out::Map(Box::new(Out::Dynamic)), value)?,
-            other => return Err(CopyError::Decode(format!("an object of tag {other}"))),
+            tag::ARRAY => self.copy(env, &Out::List(Box::new(Out::Dynamic)), value, depth)?,
+            tag::MAP => self.copy(env, &Out::Map(Box::new(Out::Dynamic)), value, depth)?,
+            other => return Err(decode(&format!("an object of tag {other}"))),
         })
     }
 
-    fn copy_class(&self, env: Env, class: u32, value: &BamlValue<'_>) -> Result<Value, CopyError> {
+    fn copy_class(
+        &self,
+        env: Env,
+        class: u32,
+        value: &BamlValue<'_>,
+        depth: usize,
+    ) -> Result<Value, CopyError> {
+        if depth > MAX_DEPTH {
+            return Err(too_deep());
+        }
         let Some(TypePlan::Class {
             fields,
             constructor,
@@ -398,7 +488,7 @@ impl Plans {
             ..
         }) = self.types.get(class as usize)
         else {
-            return Err(CopyError::Decode(format!("type {class} is not a class")));
+            return Err(decode(&format!("type {class} is not a class")));
         };
         // Up to sixteen fields are kept on the stack.
         let mut few = [std::ptr::null_mut(); 16];
@@ -411,7 +501,7 @@ impl Plans {
         };
         for (index, field) in fields.iter().enumerate() {
             let item = value.field(js::index(index))?;
-            values[index] = self.copy(env, &field.out, &item)?;
+            values[index] = self.copy(env, &field.out, &item, depth)?;
         }
         if let (Some(factory), Some(_)) = (factory, constructor) {
             return Ok(js::call(env, js::deref(env, *factory), values)?);
@@ -428,13 +518,13 @@ impl Plans {
 
     fn copy_enum(&self, env: Env, of: u32, value: &BamlValue<'_>) -> Result<Value, CopyError> {
         let Some(TypePlan::Enum { values, .. }) = self.types.get(of as usize) else {
-            return Err(CopyError::Decode(format!("type {of} is not an enum")));
+            return Err(decode(&format!("type {of} is not an enum")));
         };
         let index = value.variant_index()?;
         values
             .get(index as usize)
             .map(|variant| js::deref(env, *variant))
-            .ok_or_else(|| CopyError::Decode(format!("no variant {index} of enum {of}")))
+            .ok_or_else(|| decode(&format!("no variant {index} of enum {of}")))
     }
 
     /// What a call threw or panicked with, for JavaScript to build its error
@@ -444,7 +534,7 @@ impl Plans {
     /// value as an uncaught throw of it is written.
     pub(crate) fn thrown(&self, env: Env, value: &BamlValue<'_>) -> Value {
         let object = js::object(env);
-        let copied = match self.copy_dynamic(env, value) {
+        let copied = match self.copy_dynamic(env, value, 0) {
             Ok(copied) => copied,
             Err(CopyError::Js(_) | CopyError::Decode(_)) => js::undefined(env),
         };
@@ -468,9 +558,31 @@ impl Plans {
 
     // ---- arguments -------------------------------------------------------
 
+    /// A refused argument or call, as today's bridge raises it: a plain
+    /// `Error` with the code `InvalidArg`, its message led by the function.
+    pub(crate) fn refusal(&self, env: Env, export: u32, why: &str) -> Value {
+        let message = match self.functions.get(export as usize) {
+            Some(function) => format!("{}: {why}", user_name(&function.name)),
+            None => why.to_owned(),
+        };
+        js::error(env, Some("InvalidArg"), &message)
+    }
+
+    /// `value` as today's bridge renders it in an error message.
+    pub(crate) fn describe(&self, env: Env, value: Value) -> String {
+        let mut buffer = Vec::new();
+        match js::call(env, js::deref(env, self.describe), &[value]) {
+            Ok(text) if js::type_of(env, text) == ValueType::napi_string => {
+                js::get_string(env, text, &mut buffer).to_owned()
+            }
+            _ => "value".to_owned(),
+        }
+    }
+
     /// The arguments of export `export`, built from the JavaScript array
-    /// `args` (in parameter order; `undefined` for one not given). Throws
-    /// `invalid_argument` errors as today's SDK words them.
+    /// `args` (in parameter order; `undefined` for one not given) by
+    /// [`Walk`]. Throws `invalid_argument` errors as today's SDK words them;
+    /// what a getter throws is thrown as it is.
     pub(crate) fn arguments<'s>(
         &self,
         env: Env,
@@ -488,7 +600,7 @@ impl Plans {
         }
         let given = js::array_length(env, args);
         let mut built = Vec::with_capacity(function.params.len());
-        let mut buffer = Vec::new();
+        let mut walk = Walk::new(self, env, session);
         for (index, (name, ty, has_default)) in function.params.iter().enumerate() {
             let arg = if js::index(index) < given {
                 js::get_element(env, args, js::index(index)).map_err(|thrown| thrown.0)?
@@ -499,20 +611,18 @@ impl Plans {
                 built.push(session.omitted());
                 continue;
             }
-            let mut path = format!("argument `{name}`");
-            match self.arg(env, session, ty, arg, &mut path, &mut buffer) {
+            match walk.argument(name, ty, arg) {
                 Ok(value) => built.push(value),
                 Err(ArgError::Js(thrown)) => return Err(thrown),
-                Err(ArgError::Unfit(why)) => {
-                    return Err(js::error(env, Some("invalid_argument"), &why));
+                Err(ArgError::Unfit(why) | ArgError::TooDeep(why)) => {
+                    return Err(self.refusal(env, export, &why));
                 }
             }
         }
-        let _ = &function.name;
         Ok(built)
     }
 
-    fn render(&self, ty: &Type) -> String {
+    pub(crate) fn render(&self, ty: &Type) -> String {
         match ty {
             Type::Int => "int".to_owned(),
             Type::Float => "float".to_owned(),
@@ -525,8 +635,7 @@ impl Plans {
             Type::Class(number) | Type::Enum(number) => self.type_name(*number),
             Type::EnumVariant { of, index } => match self.types.get(*of as usize) {
                 Some(TypePlan::Enum { name, variants, .. }) => format!(
-                    "{}.{}",
-                    user_name(name),
+                    "{name}.{}",
                     variants.get(*index as usize).map_or("?", String::as_str)
                 ),
                 _ => self.type_name(*of),
@@ -541,418 +650,18 @@ impl Plans {
         }
     }
 
-    fn type_name(&self, number: u32) -> String {
+    /// A type's name as today's bridge writes it after "expected": without
+    /// the `user.` of its own code.
+    pub(crate) fn type_name(&self, number: u32) -> String {
         match self.types.get(number as usize) {
-            Some(TypePlan::Class { name, .. } | TypePlan::Enum { name, .. }) => user_name(name),
+            Some(TypePlan::Class { name, .. } | TypePlan::Enum { name, .. }) => name.clone(),
             None => format!("type {number}"),
         }
     }
-
-    fn unfit(&self, env: Env, ty: &Type, value: Value, path: &str) -> ArgError {
-        ArgError::Unfit(format!(
-            "{path}: expected {}, found {}",
-            self.render(ty),
-            found(env, value)
-        ))
-    }
-
-    #[expect(clippy::too_many_lines, reason = "one arm per type")]
-    fn arg<'s>(
-        &self,
-        env: Env,
-        session: &'s Session,
-        ty: &Type,
-        value: Value,
-        path: &mut String,
-        buffer: &mut Vec<u8>,
-    ) -> Result<BamlValue<'s>, ArgError> {
-        let kind = js::type_of(env, value);
-        match ty {
-            Type::Int => {
-                if kind == ValueType::napi_number {
-                    let n = js::get_f64(env, value);
-                    if n.fract() == 0.0 && n.abs() <= 9.223_372_036_854_775e18 {
-                        #[expect(
-                            clippy::cast_possible_truncation,
-                            reason = "a whole number within the range of an int: exact"
-                        )]
-                        return Ok(session.int(n as i64));
-                    }
-                }
-                Err(self.unfit(env, ty, value, path))
-            }
-            Type::Float => {
-                if kind == ValueType::napi_number {
-                    return Ok(session.float(js::get_f64(env, value)));
-                }
-                Err(self.unfit(env, ty, value, path))
-            }
-            Type::Bool => {
-                if kind == ValueType::napi_boolean {
-                    return Ok(session.bool(js::get_bool(env, value)));
-                }
-                Err(self.unfit(env, ty, value, path))
-            }
-            Type::Null => {
-                if matches!(kind, ValueType::napi_null | ValueType::napi_undefined) {
-                    return Ok(session.null());
-                }
-                Err(self.unfit(env, ty, value, path))
-            }
-            Type::String => {
-                if kind == ValueType::napi_string {
-                    let text = js::get_string(env, value, buffer);
-                    return session.string(text).map_err(|error| refused(path, &error));
-                }
-                Err(self.unfit(env, ty, value, path))
-            }
-            Type::LiteralString(expected) => {
-                if kind == ValueType::napi_string && js::get_string(env, value, buffer) == expected
-                {
-                    return session
-                        .string(expected)
-                        .map_err(|error| refused(path, &error));
-                }
-                Err(ArgError::Unfit(format!(
-                    "{path}: {} does not fit the literal type {}",
-                    found(env, value),
-                    self.render(ty)
-                )))
-            }
-            Type::LiteralInt(expected) => {
-                if kind == ValueType::napi_number {
-                    let n = js::get_f64(env, value);
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        reason = "compared only when whole and within the range of an int"
-                    )]
-                    if n.fract() == 0.0
-                        && n.abs() <= 9.223_372_036_854_775e18
-                        && n as i64 == *expected
-                    {
-                        return Ok(session.int(*expected));
-                    }
-                }
-                Err(ArgError::Unfit(format!(
-                    "{path}: {} does not fit the literal type {expected}",
-                    found(env, value)
-                )))
-            }
-            Type::LiteralBool(expected) => {
-                if kind == ValueType::napi_boolean && js::get_bool(env, value) == *expected {
-                    return Ok(session.bool(*expected));
-                }
-                Err(ArgError::Unfit(format!(
-                    "{path}: {} does not fit the literal type {expected}",
-                    found(env, value)
-                )))
-            }
-            Type::Enum(of) | Type::EnumVariant { of, .. } => {
-                let Some(TypePlan::Enum {
-                    name,
-                    variants,
-                    index,
-                    ..
-                }) = self.types.get(*of as usize)
-                else {
-                    return Err(ArgError::Unfit(format!("{path}: type {of} is not an enum")));
-                };
-                if kind != ValueType::napi_string {
-                    return Err(self.unfit(env, ty, value, path));
-                }
-                let text = js::get_string(env, value, buffer);
-                let Some(&position) = index.get(text) else {
-                    return Err(ArgError::Unfit(format!(
-                        "{path}: enum {} has no variant `{text}`",
-                        user_name(name)
-                    )));
-                };
-                if let Type::EnumVariant { index: wanted, .. } = ty
-                    && position != *wanted
-                {
-                    return Err(ArgError::Unfit(format!(
-                        "{path}: {} does not fit the literal type {}",
-                        found(env, value),
-                        self.render(ty)
-                    )));
-                }
-                let _ = variants;
-                session
-                    .variant(*of, position)
-                    .map_err(|error| refused(path, &error))
-            }
-            Type::List(element) => {
-                if kind != ValueType::napi_object || !js::is_array(env, value) {
-                    return Err(self.unfit(env, ty, value, path));
-                }
-                let length = js::array_length(env, value);
-                let mut elements = Vec::with_capacity(length as usize);
-                for i in 0..length {
-                    let item = js::get_element(env, value, i)?;
-                    let built = self.arg(env, session, element, item, path, buffer);
-                    elements.push(self.placed(
-                        env,
-                        session,
-                        element,
-                        item,
-                        path,
-                        buffer,
-                        built,
-                        || format!("[{i}]"),
-                    )?);
-                }
-                session
-                    .array(elements)
-                    .map_err(|error| refused(path, &error))
-            }
-            Type::Map(item_type) => {
-                if kind != ValueType::napi_object || js::is_array(env, value) {
-                    return Err(self.unfit(env, ty, value, path));
-                }
-                let keys = js::keys(env, value)?;
-                let length = js::array_length(env, keys);
-                let mut entries = Vec::with_capacity(length as usize);
-                for i in 0..length {
-                    let key = js::get_element(env, keys, i)?;
-                    let item = js::get_property(env, value, key)?;
-                    let text = js::get_string(env, key, buffer).to_owned();
-                    let built = self.arg(env, session, item_type, item, path, buffer);
-                    let item =
-                        self.placed(env, session, item_type, item, path, buffer, built, || {
-                            format!("[{text:?}]")
-                        })?;
-                    entries.push((
-                        session
-                            .string(&text)
-                            .map_err(|error| refused(path, &error))?,
-                        item,
-                    ));
-                }
-                session.map(entries).map_err(|error| refused(path, &error))
-            }
-            Type::Class(class) => self.arg_class(env, session, *class, ty, value, path, buffer),
-            Type::Union(members) => self.arg_union(env, session, ty, members, value, path, buffer),
-        }
-    }
-
-    /// An element or entry built with the container's path: when it is
-    /// refused, it is walked again with its place added, for the message.
-    /// The place is only formatted then, not for every element.
-    #[expect(clippy::too_many_arguments, reason = "the walk's state")]
-    fn placed<'s>(
-        &self,
-        env: Env,
-        session: &'s Session,
-        ty: &Type,
-        value: Value,
-        path: &mut String,
-        buffer: &mut Vec<u8>,
-        built: Result<BamlValue<'s>, ArgError>,
-        place: impl FnOnce() -> String,
-    ) -> Result<BamlValue<'s>, ArgError> {
-        match built {
-            Err(ArgError::Unfit(why)) => {
-                let base = path.len();
-                path.push_str(&place());
-                let again = self.arg(env, session, ty, value, path, buffer);
-                path.truncate(base);
-                Err(again.err().unwrap_or(ArgError::Unfit(why)))
-            }
-            other => other,
-        }
-    }
-
-    #[expect(clippy::too_many_arguments, reason = "the walk's state")]
-    fn arg_class<'s>(
-        &self,
-        env: Env,
-        session: &'s Session,
-        class: u32,
-        ty: &Type,
-        value: Value,
-        path: &mut String,
-        buffer: &mut Vec<u8>,
-    ) -> Result<BamlValue<'s>, ArgError> {
-        let Some(TypePlan::Class { name, fields, .. }) = self.types.get(class as usize) else {
-            return Err(ArgError::Unfit(format!(
-                "{path}: type {class} is not a class"
-            )));
-        };
-        if js::type_of(env, value) != ValueType::napi_object || js::is_array(env, value) {
-            return Err(self.unfit(env, ty, value, path));
-        }
-        let mut built = Vec::with_capacity(fields.len());
-        let base = path.len();
-        for field in fields {
-            let item = js::get_property(env, value, js::deref(env, field.key))?;
-            if js::type_of(env, item) == ValueType::napi_undefined {
-                if field.nullable {
-                    built.push(session.null());
-                    continue;
-                }
-                return Err(ArgError::Unfit(format!(
-                    "{path}: class {} requires field `{}`",
-                    user_name(name),
-                    field.name
-                )));
-            }
-            path.push('.');
-            path.push_str(&field.name);
-            built.push(self.arg(env, session, &field.ty, item, path, buffer)?);
-            path.truncate(base);
-        }
-        session
-            .instance(class, built)
-            .map_err(|error| ArgError::Unfit(format!("{path}: {error}")))
-    }
-
-    /// A member of a union, chosen by the JavaScript value: `null` for a
-    /// nullable union, a number as `int` when it is whole and `int` is a
-    /// member (else `float`), a string as `string`, a literal or an enum
-    /// variant it names, an instance of a generated class as that class,
-    /// and anything else by trying each member that could take it, in
-    /// order.
-    #[expect(clippy::too_many_arguments, reason = "the walk's state")]
-    fn arg_union<'s>(
-        &self,
-        env: Env,
-        session: &'s Session,
-        ty: &Type,
-        members: &[Type],
-        value: Value,
-        path: &mut String,
-        buffer: &mut Vec<u8>,
-    ) -> Result<BamlValue<'s>, ArgError> {
-        let kind = js::type_of(env, value);
-        let candidates: Vec<&Type> = match kind {
-            ValueType::napi_undefined | ValueType::napi_null => members
-                .iter()
-                .filter(|member| admits_null(member))
-                .collect(),
-            ValueType::napi_boolean => members
-                .iter()
-                .filter(|member| {
-                    matches!(member, Type::Bool | Type::LiteralBool(_) | Type::Union(_))
-                })
-                .collect(),
-            ValueType::napi_number => {
-                let whole = js::get_f64(env, value).fract() == 0.0;
-                let mut ordered: Vec<&Type> = Vec::new();
-                if whole {
-                    ordered.extend(members.iter().filter(|m| matches!(m, Type::Int)));
-                }
-                ordered.extend(members.iter().filter(|m| matches!(m, Type::Float)));
-                ordered.extend(
-                    members
-                        .iter()
-                        .filter(|m| matches!(m, Type::LiteralInt(_) | Type::Union(_))),
-                );
-                ordered
-            }
-            ValueType::napi_string => {
-                let mut ordered: Vec<&Type> = Vec::new();
-                ordered.extend(
-                    members
-                        .iter()
-                        .filter(|m| matches!(m, Type::LiteralString(_))),
-                );
-                ordered.extend(
-                    members
-                        .iter()
-                        .filter(|m| matches!(m, Type::Enum(_) | Type::EnumVariant { .. })),
-                );
-                ordered.extend(
-                    members
-                        .iter()
-                        .filter(|m| matches!(m, Type::String | Type::Union(_))),
-                );
-                ordered
-            }
-            ValueType::napi_object if js::is_array(env, value) => members
-                .iter()
-                .filter(|m| matches!(m, Type::List(_) | Type::Union(_)))
-                .collect(),
-            ValueType::napi_object => {
-                // An instance of a generated class picks its class first.
-                let constructor = js::get_named(env, value, c"constructor").ok();
-                let mut ordered: Vec<&Type> = Vec::new();
-                if let Some(constructor) = constructor {
-                    ordered.extend(members.iter().filter(|member| match member {
-                        Type::Class(class) => self.is_constructor_of(env, *class, constructor),
-                        _ => false,
-                    }));
-                }
-                ordered.extend(
-                    members
-                        .iter()
-                        .filter(|m| matches!(m, Type::Class(_) | Type::Map(_) | Type::Union(_))),
-                );
-                ordered
-            }
-            _ => Vec::new(),
-        };
-        let mut last = None;
-        for member in candidates {
-            let base = path.len();
-            match self.arg(env, session, member, value, path, buffer) {
-                Ok(built) => return Ok(built),
-                Err(ArgError::Js(thrown)) => return Err(ArgError::Js(thrown)),
-                Err(unfit) => {
-                    path.truncate(base);
-                    last = Some(unfit);
-                }
-            }
-        }
-        // One candidate: its own reason is the clearest.
-        match last {
-            Some(unfit) if members.len() == 1 => Err(unfit),
-            _ => Err(ArgError::Unfit(format!(
-                "{path}: expected one of {}, found {}",
-                self.render(ty),
-                found(env, value)
-            ))),
-        }
-    }
-
-    fn is_constructor_of(&self, env: Env, class: u32, constructor: Value) -> bool {
-        match self.types.get(class as usize) {
-            Some(TypePlan::Class {
-                constructor: Some(ours),
-                ..
-            }) => js::strict_equals(env, js::deref(env, *ours), constructor),
-            _ => false,
-        }
-    }
-}
-
-fn refused(path: &str, error: &SdkError) -> ArgError {
-    ArgError::Unfit(format!("{path}: {error}"))
 }
 
 /// An `int` as JavaScript has it: a number, as `Number(int)` in today's SDK.
 fn int_value(env: Env, value: &BamlValue<'_>) -> Result<Value, CopyError> {
     #[expect(clippy::cast_precision_loss, reason = "what today's SDK does")]
     Ok(js::number(env, value.int()? as f64))
-}
-
-/// What a JavaScript value is, for an error message.
-fn found(env: Env, value: Value) -> &'static str {
-    match js::type_of(env, value) {
-        ValueType::napi_undefined => "undefined",
-        ValueType::napi_null => "null",
-        ValueType::napi_boolean => "a boolean",
-        ValueType::napi_number => {
-            if js::get_f64(env, value).fract() == 0.0 {
-                "a whole number"
-            } else {
-                "a number"
-            }
-        }
-        ValueType::napi_string => "a string",
-        ValueType::napi_object if js::is_array(env, value) => "an array",
-        ValueType::napi_object => "an object",
-        ValueType::napi_function => "a function",
-        ValueType::napi_bigint => "a bigint",
-        _ => "a value",
-    }
 }

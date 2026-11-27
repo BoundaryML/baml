@@ -22,15 +22,21 @@
 //!   JavaScript value directly. Every turn returns
 //!   `[delayMs, pending, id, status, payload, ...]`.
 //!
-//! Every entry point runs on Node's main thread. One that is entered while
-//! another holds the library (a constructor called during a copy that calls
-//! a binding) throws instead of waiting for the lock.
+//! The addon belongs to the first JavaScript environment that loads the
+//! library: every entry point called from another (a `worker_threads`
+//! worker, or a second copy of the addon) throws, and touches no shared
+//! state. When that environment is torn down, the thread-safe function is
+//! released, and a wake after that does nothing. An entry point that is
+//! entered while another holds the library (a constructor run during a
+//! copy, a getter run while arguments are read, that calls a binding)
+//! throws instead of waiting for the lock.
 
 #![expect(
     unsafe_code,
     reason = "the Node-API C functions, and the addon's entry points Node calls"
 )]
 
+mod args;
 mod copy;
 mod js;
 
@@ -71,8 +77,11 @@ mod status {
 
 /// What any thread may touch: the wake path.
 struct Shared {
-    /// The thread-safe function that calls `onWake` on Node's loop.
-    tsfn: AtomicPtr<c_void>,
+    /// The thread-safe function that calls `onWake` on Node's loop, as an
+    /// address; zero before `load` and after its environment is torn down.
+    /// A wake calls it under this lock, and the teardown releases it under
+    /// the same lock, so no wake uses it after it is released.
+    tsfn: Mutex<usize>,
     /// A wake is posted to the loop and its turn has not started yet.
     wake_posted: AtomicBool,
     /// Set by every wake; what `drive` sleeps on.
@@ -81,13 +90,63 @@ struct Shared {
 }
 
 static SHARED: Shared = Shared {
-    tsfn: AtomicPtr::new(ptr::null_mut()),
+    tsfn: Mutex::new(0),
     wake_posted: AtomicBool::new(false),
     woken: Mutex::new(false),
     condvar: Condvar::new(),
 };
 
 static LIBRARY: OnceLock<&'static Library> = OnceLock::new();
+
+/// The environment the addon belongs to: the first that loaded the library.
+static OWNER: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
+
+/// Refuse an entry point called from an environment the addon does not
+/// belong to, before it touches anything.
+fn owned(env: Env) -> Result<(), Value> {
+    let owner = OWNER.load(Ordering::Acquire);
+    if owner.is_null() {
+        return Err(js::error(env, None, "the BAML library is not loaded"));
+    }
+    if owner != env.cast() {
+        return Err(other_environment(env));
+    }
+    Ok(())
+}
+
+fn other_environment(env: Env) -> Value {
+    js::error(
+        env,
+        Some("other_environment"),
+        "the native BAML library belongs to another JavaScript environment: it runs on the \
+         thread that loaded it first, so a worker_threads worker, or a second copy of the \
+         addon, cannot call it",
+    )
+}
+
+fn tsfn_lock() -> std::sync::MutexGuard<'static, usize> {
+    SHARED
+        .tsfn
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// When the owner's environment is torn down: release the thread-safe
+/// function (before Node frees it; this hook was added after the function
+/// was made, so it runs first), and stop every later wake from using it.
+unsafe extern "C" fn teardown(_arg: *mut c_void) {
+    let mut tsfn = tsfn_lock();
+    let address = std::mem::take(&mut *tsfn);
+    if address != 0 {
+        // SAFETY: the live thread-safe function, released once.
+        unsafe {
+            sys::napi_release_threadsafe_function(
+                address as sys::napi_threadsafe_function,
+                sys::ThreadsafeFunctionReleaseMode::abort,
+            )
+        };
+    }
+}
 
 /// What only Node's main thread touches.
 #[derive(Default)]
@@ -115,12 +174,13 @@ fn wake() {
     }
     SHARED.condvar.notify_all();
     if !SHARED.wake_posted.swap(true, Ordering::AcqRel) {
-        let tsfn = SHARED.tsfn.load(Ordering::Acquire);
-        if !tsfn.is_null() {
-            // SAFETY: a thread-safe function, callable from any thread.
+        let tsfn = tsfn_lock();
+        if *tsfn != 0 {
+            // SAFETY: a live thread-safe function (the lock keeps the
+            // teardown from releasing it meanwhile), callable from any thread.
             unsafe {
                 sys::napi_call_threadsafe_function(
-                    tsfn.cast(),
+                    *tsfn as sys::napi_threadsafe_function,
                     ptr::null_mut(),
                     sys::ThreadsafeFunctionCallMode::nonblocking,
                 )
@@ -153,8 +213,9 @@ impl Busy {
             return Err(js::error(
                 env,
                 Some("reentrant"),
-                "a BAML function was called while the native bridge was copying a value into \
-                 JavaScript (from a class constructor?): call it after the result is returned",
+                "a BAML function was called while the native bridge held the BAML library, from \
+                 code it ran (a class constructor while copying a result, or a getter while \
+                 reading an argument): call it after that call returns",
             ));
         }
         Ok(Self)
@@ -193,10 +254,12 @@ fn started(env: Env) {
         let mut main = main.borrow_mut();
         main.pending += 1;
         if main.pending == 1 {
-            let tsfn = SHARED.tsfn.load(Ordering::Acquire);
-            if !tsfn.is_null() {
-                // SAFETY: the thread-safe function, on the main thread.
-                unsafe { sys::napi_ref_threadsafe_function(env, tsfn.cast()) };
+            let tsfn = tsfn_lock();
+            if *tsfn != 0 {
+                // SAFETY: the live thread-safe function, on its own thread.
+                unsafe {
+                    sys::napi_ref_threadsafe_function(env, *tsfn as sys::napi_threadsafe_function)
+                };
             }
         }
     });
@@ -207,10 +270,12 @@ fn ended(env: Env) {
         let mut main = main.borrow_mut();
         main.pending = main.pending.saturating_sub(1);
         if main.pending == 0 {
-            let tsfn = SHARED.tsfn.load(Ordering::Acquire);
-            if !tsfn.is_null() {
+            let tsfn = tsfn_lock();
+            if *tsfn != 0 {
                 // SAFETY: as above.
-                unsafe { sys::napi_unref_threadsafe_function(env, tsfn.cast()) };
+                unsafe {
+                    sys::napi_unref_threadsafe_function(env, *tsfn as sys::napi_threadsafe_function)
+                };
             }
         }
     });
@@ -324,7 +389,7 @@ fn start_call(
     let built = plans.arguments(env, session, export, args)?;
     let call = session
         .start(export, &built)
-        .map_err(|error| js::error(env, Some("invalid_argument"), &error.to_string()))?;
+        .map_err(|error| plans.refusal(env, export, &error.to_string()))?;
     drop(built);
     CALLS.with(|calls| calls.borrow_mut().insert(call, export));
     started(env);
@@ -334,16 +399,32 @@ fn start_call(
 unsafe extern "C" fn load(env: Env, info: sys::napi_callback_info) -> Value {
     let [path, hash, on_wake] = js::arguments::<3>(env, info);
     entry(env, || {
+        let owner = OWNER.load(Ordering::Acquire);
+        if !owner.is_null() && owner != env.cast() {
+            return Err(other_environment(env));
+        }
         let mut buffer = Vec::new();
         let path = js::get_string(env, path, &mut buffer).to_owned();
         let hash_text = js::get_string(env, hash, &mut buffer).to_owned();
         let expected = u64::from_str_radix(hash_text.trim_start_matches("0x"), 16)
             .map_err(|_| js::error(env, None, &format!("not an interface hash: {hash_text}")))?;
-        if SHARED.tsfn.load(Ordering::Acquire).is_null() {
+        let library = Library::load(&path, expected, wake)
+            .map_err(|error| js::error(env, None, &error.to_string()))?;
+        let _ = LIBRARY.set(library);
+        if OWNER
+            .compare_exchange(
+                ptr::null_mut(),
+                env.cast(),
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+        {
             let mut tsfn = ptr::null_mut();
-            // SAFETY: `on_wake` is a function of this call; the thread-safe
+            // SAFETY: `on_wake` is a function of this call. The thread-safe
             // function is made unreferenced, and referenced while calls are
-            // pending.
+            // pending. The teardown hook is added after it, so it runs before
+            // Node's own cleanup of the function.
             unsafe {
                 sys::napi_create_threadsafe_function(
                     env,
@@ -359,29 +440,45 @@ unsafe extern "C" fn load(env: Env, info: sys::napi_callback_info) -> Value {
                     &raw mut tsfn,
                 );
                 sys::napi_unref_threadsafe_function(env, tsfn);
+                *tsfn_lock() = tsfn as usize;
+                sys::napi_add_env_cleanup_hook(env, Some(teardown), ptr::null_mut());
             }
-            SHARED.tsfn.store(tsfn.cast(), Ordering::Release);
         }
-        let library = Library::load(&path, expected, wake)
-            .map_err(|error| js::error(env, None, &error.to_string()))?;
-        let _ = LIBRARY.set(library);
         Ok(js::string(env, library.interface_json()))
     })
 }
 
 /// `types()`: per interface type, `[name, isEnum, fieldOrVariantNames]`.
 unsafe extern "C" fn types(env: Env, _info: sys::napi_callback_info) -> Value {
-    entry(env, || Ok(copy::describe_types(env, library(env)?)))
+    entry(env, || {
+        owned(env)?;
+        Ok(copy::describe_types(env, library(env)?))
+    })
 }
 
 /// `functions()`: per export, `[name, paramNames, hasDefault]`.
 unsafe extern "C" fn functions(env: Env, _info: sys::napi_callback_info) -> Value {
-    entry(env, || Ok(copy::describe_functions(env, library(env)?)))
+    entry(env, || {
+        owned(env)?;
+        Ok(copy::describe_functions(env, library(env)?))
+    })
 }
 
+/// `bind(constructors, factories, enumValues, makeMap, mode, classTag, describe)`:
+/// plans for every type. The old plans' references are deleted.
 unsafe extern "C" fn bind(env: Env, info: sys::napi_callback_info) -> Value {
-    let [constructors, factories, enum_values, make_map, mode] = js::arguments::<5>(env, info);
+    let [
+        constructors,
+        factories,
+        enum_values,
+        make_map,
+        mode,
+        class_tag,
+        describe,
+    ] = js::arguments::<7>(env, info);
     entry(env, || {
+        owned(env)?;
+        let _busy = Busy::enter(env)?;
         let library = library(env)?;
         let mode = js::whole(env, mode).unwrap_or(0);
         let plans = Plans::build(
@@ -392,9 +489,15 @@ unsafe extern "C" fn bind(env: Env, info: sys::napi_callback_info) -> Value {
             enum_values,
             make_map,
             mode,
+            class_tag,
+            describe,
         )
         .map_err(|thrown| thrown.0)?;
-        MAIN.with(|main| main.borrow_mut().plans = Some(Rc::new(plans)));
+        let old = MAIN.with(|main| main.borrow_mut().plans.replace(Rc::new(plans)));
+        // No entry point holds the old plans: they are taken under the guard.
+        if let Some(old) = old.and_then(|old| Rc::try_unwrap(old).ok()) {
+            old.release(env);
+        }
         Ok(js::undefined(env))
     })
 }
@@ -403,6 +506,7 @@ unsafe extern "C" fn bind(env: Env, info: sys::napi_callback_info) -> Value {
 unsafe extern "C" fn start(env: Env, info: sys::napi_callback_info) -> Value {
     let [export, args] = js::arguments::<2>(env, info);
     entry(env, || {
+        owned(env)?;
         let _busy = Busy::enter(env)?;
         let plans = plans(env)?;
         let session = library(env)?.session();
@@ -417,6 +521,7 @@ unsafe extern "C" fn start(env: Env, info: sys::napi_callback_info) -> Value {
 unsafe extern "C" fn call(env: Env, info: sys::napi_callback_info) -> Value {
     let [export, args] = js::arguments::<2>(env, info);
     entry(env, || {
+        owned(env)?;
         let _busy = Busy::enter(env)?;
         let plans = plans(env)?;
         let session = library(env)?.session();
@@ -436,6 +541,7 @@ unsafe extern "C" fn call(env: Env, info: sys::napi_callback_info) -> Value {
 /// `turn()`: `[delayMs, pending, id, status, payload, ...]`.
 unsafe extern "C" fn turn(env: Env, _info: sys::napi_callback_info) -> Value {
     entry(env, || {
+        owned(env)?;
         let _busy = Busy::enter(env)?;
         let plans = plans(env)?;
         let session = library(env)?.session();
@@ -452,6 +558,7 @@ unsafe extern "C" fn turn(env: Env, _info: sys::napi_callback_info) -> Value {
 unsafe extern "C" fn drive(env: Env, info: sys::napi_callback_info) -> Value {
     let [id] = js::arguments::<1>(env, info);
     entry(env, || {
+        owned(env)?;
         let _busy = Busy::enter(env)?;
         let plans = plans(env)?;
         let library = library(env)?;
@@ -491,6 +598,7 @@ unsafe extern "C" fn drive(env: Env, info: sys::napi_callback_info) -> Value {
 /// `handleCount()`: live handles. For tests.
 unsafe extern "C" fn handle_count(env: Env, _info: sys::napi_callback_info) -> Value {
     entry(env, || {
+        owned(env)?;
         let _busy = Busy::enter(env)?;
         #[expect(clippy::cast_precision_loss, reason = "a count")]
         Ok(js::number(env, library(env)?.handle_count() as f64))
@@ -500,6 +608,7 @@ unsafe extern "C" fn handle_count(env: Env, _info: sys::napi_callback_info) -> V
 /// `collect()`: collect now. For tests.
 unsafe extern "C" fn collect(env: Env, _info: sys::napi_callback_info) -> Value {
     entry(env, || {
+        owned(env)?;
         let _busy = Busy::enter(env)?;
         library(env)?.collect();
         Ok(js::undefined(env))
