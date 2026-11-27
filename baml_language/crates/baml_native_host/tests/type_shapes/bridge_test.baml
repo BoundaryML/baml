@@ -236,3 +236,40 @@ function late_explode(milliseconds: int) -> int {
   nap(milliseconds);
   explode(1)
 }
+
+// Added for the HTTP tests: requests the library sends itself.
+
+class HttpReply {
+  status int
+  body string
+}
+
+// GET `url`. `timeout_ms` bounds the whole exchange.
+function http_get(url: string, timeout_ms: int) -> HttpReply {
+  let request = baml.http.Request.from_url(url)
+    .set_method("GET")
+    .set_timeout(baml.time.Duration.from_milliseconds(timeout_ms));
+  let response = baml.http.send(request);
+  HttpReply { status: response.status_code, body: response.text() }
+}
+
+class Greeting {
+  name string
+  count int
+}
+
+class Echo {
+  name string
+  count int
+  served_by string
+}
+
+// POST `greeting` to `url` as JSON, and read the reply as an `Echo`.
+function http_post_json(url: string, greeting: Greeting) -> Echo {
+  let request = baml.http.Request.from_url(url)
+    .set_method("POST")
+    .set_headers({"content-type": "application/json"})
+    .set_body(baml.json.stringify(greeting));
+  let response = baml.http.send(request);
+  baml.json.decode<Echo>(response.text())
+}
