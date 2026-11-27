@@ -32,9 +32,13 @@ pub mod futures;
 mod values;
 
 use std::{
+    cell::UnsafeCell,
     ffi::{CString, c_char, c_int, c_void},
     marker::PhantomData,
-    sync::{Mutex, MutexGuard, OnceLock},
+    sync::{
+        Mutex, MutexGuard, OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 
@@ -194,41 +198,48 @@ pub struct Library {
     path: String,
     /// Every call into the library holds it: one thread at a time.
     lock: Mutex<()>,
-    /// What the callbacks reported in the turn running now. A callback
-    /// takes it while the turn holds `lock`; the vector keeps its room
-    /// from turn to turn.
-    events: Mutex<Vec<RawEvent>>,
+    /// What the callbacks reported in the turn running now; the vector
+    /// keeps its room from turn to turn. Only touched while `lock` is held:
+    /// by a session, and by the callbacks, which run inside a turn.
+    events: UnsafeCell<Vec<RawEvent>>,
     /// Handles of [`Detached`] values dropped outside a session, freed at
-    /// the next one.
+    /// the next one, and whether there are any.
     frees: Mutex<Vec<u64>>,
+    has_frees: AtomicBool,
     /// What the library calls, from any thread, when it wants a turn.
     wake: WakeFn,
     exports: Vec<Export>,
     interface_json: String,
 }
 
+// SAFETY: `events`, the one field that is not `Sync` by itself, is only
+// touched while `lock` is held.
+unsafe impl Sync for Library {}
+
 static LIBRARY: OnceLock<Library> = OnceLock::new();
 /// Held while a library loads, so that two first loads do not race.
 static LOADING: Mutex<()> = Mutex::new(());
 
-unsafe extern "C" fn on_done(_ctx: *mut c_void, call: u64, status: u32, tag: u64, payload: u64) {
+/// Keep what a callback reported for the turn's session.
+///
+/// # Safety
+///
+/// Called inside a turn, which runs while a session holds the library.
+unsafe fn report(event: RawEvent) {
     if let Some(library) = LIBRARY.get() {
-        library
-            .events
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(RawEvent::Ended(call, status, RawValue { tag, payload }));
+        // SAFETY: the caller's contract: the session's lock is held.
+        unsafe { (*library.events.get()).push(event) };
     }
 }
 
+unsafe extern "C" fn on_done(_ctx: *mut c_void, call: u64, status: u32, tag: u64, payload: u64) {
+    // SAFETY: the library calls it only inside a turn.
+    unsafe { report(RawEvent::Ended(call, status, RawValue { tag, payload })) };
+}
+
 unsafe extern "C" fn on_unhandled(_ctx: *mut c_void, call: u64, tag: u64, payload: u64) {
-    if let Some(library) = LIBRARY.get() {
-        library
-            .events
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(RawEvent::Unhandled(call, RawValue { tag, payload }));
-    }
+    // SAFETY: as above.
+    unsafe { report(RawEvent::Unhandled(call, RawValue { tag, payload })) };
 }
 
 unsafe extern "C" fn wake(_ctx: *mut c_void) {
@@ -278,8 +289,9 @@ impl Library {
             fns,
             path: path.to_owned(),
             lock: Mutex::new(()),
-            events: Mutex::new(Vec::new()),
+            events: UnsafeCell::new(Vec::new()),
             frees: Mutex::new(Vec::new()),
+            has_frees: AtomicBool::new(false),
             wake: Box::new(wake),
             exports,
             interface_json,
@@ -338,15 +350,17 @@ impl Library {
     /// are freed now.
     pub fn session(&'static self) -> Session {
         let guard = self.lock();
-        let frees = std::mem::take(
-            &mut *self
-                .frees
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
-        for handle in frees {
-            // SAFETY: a handle this crate owned, under the lock.
-            unsafe { (self.fns.handle_free)(handle) };
+        if self.has_frees.swap(false, Ordering::AcqRel) {
+            let frees = std::mem::take(
+                &mut *self
+                    .frees
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
+            for handle in frees {
+                // SAFETY: a handle this crate owned, under the lock.
+                unsafe { (self.fns.handle_free)(handle) };
+            }
         }
         Session {
             library: self,
@@ -361,6 +375,7 @@ impl Library {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(handle);
+        self.has_frees.store(true, Ordering::Release);
     }
 
     /// The number of an export, by name.
@@ -542,7 +557,18 @@ impl Session {
     /// Returns the call's id. The arguments stay the caller's, but an
     /// array or a map is taken: it can be passed once.
     pub fn start(&self, export: u32, args: &[BamlValue<'_>]) -> Result<u64, SdkError> {
-        let raw: Vec<RawValue> = args.iter().map(BamlValue::raw).collect();
+        // Up to eight arguments are passed from the stack.
+        let mut few = [RawValue { tag: 0, payload: 0 }; 8];
+        let many: Vec<RawValue>;
+        let raw: &[RawValue] = if args.len() <= few.len() {
+            for (place, arg) in few.iter_mut().zip(args) {
+                *place = arg.raw();
+            }
+            &few[..args.len()]
+        } else {
+            many = args.iter().map(BamlValue::raw).collect();
+            &many
+        };
         // SAFETY: `raw` is its length of values, under the lock.
         let id = unsafe { (self.fns().call_start)(u64::from(export), raw.as_ptr(), raw.len()) };
         if id == 0 { Err(self.refused()) } else { Ok(id) }
@@ -556,13 +582,9 @@ impl Session {
     pub fn turn(&self, mut each: impl FnMut(Event<'_>)) -> Option<Duration> {
         // SAFETY: under the lock.
         let next = unsafe { (self.fns().turn)() };
-        let mut events = std::mem::take(
-            &mut *self
-                .library
-                .events
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        // SAFETY: this session holds the lock; the turn is over, so no
+        // callback runs while it is taken.
+        let mut events = std::mem::take(unsafe { &mut *self.library.events.get() });
         for event in events.drain(..) {
             each(match event {
                 RawEvent::Ended(call, status, raw) => Event::Ended {
@@ -581,15 +603,11 @@ impl Session {
                 },
             });
         }
-        // The emptied vector keeps its room for the next turn.
-        let mut kept = self
-            .library
-            .events
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if kept.is_empty() {
-            *kept = events;
-        }
+        // The emptied vector keeps its room for the next turn. Had `each`
+        // turned again through this session, what that turn reported was
+        // handed over by it already.
+        // SAFETY: as above.
+        unsafe { *self.library.events.get() = events };
         u64::try_from(next).ok().map(Duration::from_nanos)
     }
 

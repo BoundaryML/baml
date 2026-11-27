@@ -75,15 +75,38 @@ impl<E> From<SdkError> for Error<E> {
 
 type Hook = Arc<dyn Fn(&str) + Send + Sync>;
 
+/// Hashes a call id, which the library hands out counting up, by one
+/// multiplication: no keyed hash is needed for numbers nobody chooses.
+#[derive(Default)]
+struct CallIdHasher(u64);
+
+impl std::hash::Hasher for CallIdHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for byte in bytes {
+            self.0 = (self.0 << 8 | u64::from(*byte)).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        }
+    }
+
+    fn write_u64(&mut self, id: u64) {
+        self.0 = id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    }
+}
+
+type ById = std::hash::BuildHasherDefault<CallIdHasher>;
+
 /// The calls' side of a turn.
 #[derive(Default)]
 struct State {
     /// Calls that ended, not yet taken by their `Call`.
-    ended: HashMap<u64, (Outcome, Detached)>,
+    ended: HashMap<u64, (Outcome, Detached), ById>,
     /// Calls that wait, with whoever to wake.
-    waiting: HashMap<u64, Waker>,
+    waiting: HashMap<u64, Waker, ById>,
     /// Calls whose `Call` was dropped: their results are dropped too.
-    abandoned: HashSet<u64>,
+    abandoned: HashSet<u64, ById>,
 }
 
 /// When the library's next timer fires.
@@ -218,6 +241,8 @@ impl Driver {
     /// nothing held, wake the calls that ended and report failures nobody
     /// awaited.
     fn turn(&self) {
+        // Most turns end one call: its waker needs no vector.
+        let mut first_woken = None;
         let mut woken = Vec::new();
         let mut unhandled = Vec::new();
         let next = {
@@ -235,7 +260,11 @@ impl Driver {
                     } else {
                         state.ended.insert(call, (outcome, value.detach()));
                         if let Some(waker) = state.waiting.remove(&call) {
-                            woken.push(waker);
+                            if first_woken.is_none() {
+                                first_woken = Some(waker);
+                            } else {
+                                woken.push(waker);
+                            }
                         }
                     }
                 }
@@ -246,7 +275,7 @@ impl Driver {
             *lock(&self.timer.deadline) = Some(Instant::now() + next);
             self.timer.changed.notify_one();
         }
-        for waker in woken {
+        for waker in first_woken.into_iter().chain(woken) {
             waker.wake();
         }
         if !unhandled.is_empty() {
