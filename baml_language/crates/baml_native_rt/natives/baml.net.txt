@@ -1,0 +1,13 @@
+# Natives of `baml.net`, implemented in `src/native/net.rs`. Each class
+# owns its socket as Rust state.
+baml.net.TcpStream._connect async
+baml.net.TcpStream.close async
+baml.net.baml.io.Read$for$TcpStream.read async
+baml.net.baml.io.Write$for$TcpStream.write_some async
+baml.net.TcpListener.bind async
+baml.net.TcpListener.accept async
+baml.net.TcpListener.close async
+baml.net.UdpSocket.bind async
+baml.net.UdpSocket._send_to async
+baml.net.UdpSocket._recv_from async
+baml.net.UdpSocket.close async

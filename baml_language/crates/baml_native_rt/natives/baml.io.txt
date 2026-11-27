@@ -1,0 +1,8 @@
+# Natives of `baml.io`, implemented in `src/native/io.rs`. The four that
+# print write where they are called: a program that only prints links no
+# I/O runtime.
+baml.io.print
+baml.io.println
+baml.io.eprint
+baml.io.eprintln
+baml.io.input async

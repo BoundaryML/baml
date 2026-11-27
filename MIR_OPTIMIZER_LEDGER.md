@@ -795,6 +795,21 @@ stays the Rust function.
 - `for_each` and `filter_map` were already BAML. They use `for ... in` and
   `push`, so they have the costs above. Not changed.
 
+### Drivers
+
+`sort_by`, `flat_map`, `find_last` and `find_last_index` each have a sibling
+named `_driver_` and its name: the same loop a loop form would be (for
+`sort_by` the bottom-up merge above, same comparison order, write-back in
+one step at the end). `inline::driver_form` finds it. The inliner never
+uses a driver, so O0, O1 and O2 MIR and the bytecode of every caller are
+what they were: the reasons above for leaving the four as Rust functions
+stand. The native backend, whose runtime cannot call a closure, calls the
+driver where the interpreter calls the Rust function. A method with a loop
+form needs no driver: the native backend runs the loop form.
+
+Their cost is the one under "Cost" below: four more standard library
+methods compiled by every uncached run, not measured separately.
+
 ### Measured
 
 Instructions retired, fasttest build, `/usr/bin/time -l`, best of 2, two

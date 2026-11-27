@@ -40,6 +40,9 @@ members = [
 ]
 exclude = [
   "vendor/quanta",
+  "vendor/cranelift-codegen",
+  "vendor/cranelift-codegen-meta",
+  "vendor/cranelift-frontend",
   # Live system-test harnesses are intentionally outside the workspace. They
   # enable native-only tokio/reqwest features such as `fs` and `rt-multi-thread`;
   # keeping them out prevents workspace wasm builds from inheriting those
@@ -104,6 +107,7 @@ baml_compiler2_metrics = { path = "crates/baml_compiler2_metrics" }
 baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_rust = { path = "crates/baml_compiler2_rust" }
+baml_compiler2_native = { path = "crates/baml_compiler2_native" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 bex_cache = { path = "crates/bex_cache", default-features = false }
@@ -190,6 +194,16 @@ console = "0.16"
 console_error_panic_hook = "0.1"
 miette = { version = "7.6", default-features = false, features = [ "fancy-no-syscall" ] }
 owo-colors = "4"
+# Code generator for the ahead-of-time native backend (`baml_compiler2_native`).
+# `cranelift-codegen`, `cranelift-codegen-meta` and `cranelift-frontend` build
+# from the patched sources in `vendor/` (see `[patch.crates-io]` below and each
+# crate's `UPSTREAM.toml`); the rest are the crates.io releases, compiled
+# against the vendored code generator.
+cranelift-codegen = { version = "=0.130.2", default-features = false, features = [ "std", "host-arch" ] }
+cranelift-frontend = { version = "=0.130.2" }
+cranelift-module = { version = "=0.130.2" }
+cranelift-native = { version = "=0.130.2" }
+cranelift-object = { version = "=0.130.2" }
 crossbeam-channel = { version = "0.5" }
 derive_more = { version = "2.1.1", features = [ "from" ] }
 dirs = "7.0.0"
@@ -437,6 +451,15 @@ if_not_else = "allow"
 
 # Diagnostics are not actionable: Enable once https://github.com/rust-lang/rust-clippy/issues/13774 is resolved.
 large_stack_arrays = "allow"
+
+# Cranelift's code generator with BAML's lowering patches. A `[patch]` rather
+# than path dependencies alone, so the unvendored Cranelift crates
+# (`cranelift-module`, `cranelift-native`, `cranelift-object`) resolve to the
+# same code generator.
+[patch.crates-io]
+cranelift-codegen = { path = "vendor/cranelift-codegen" }
+cranelift-codegen-meta = { path = "vendor/cranelift-codegen-meta" }
+cranelift-frontend = { path = "vendor/cranelift-frontend" }
 
 [profile.release]
 lto = "fat"

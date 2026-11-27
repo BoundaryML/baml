@@ -1,0 +1,17 @@
+# Natives of `baml.crypto`, implemented in `src/native/crypto.rs`. A hasher
+# owns its digest in progress, and a cipher its key schedule, as Rust state.
+baml.crypto.Sha256.new allocates
+baml.crypto.Hasher$for$Sha256.update
+baml.crypto.Hasher$for$Sha256.finish allocates
+baml.crypto.Aes128GcmSiv.new allocates
+baml.crypto.Aead$for$Aes128GcmSiv.encrypt allocates
+baml.crypto.Aead$for$Aes128GcmSiv.decrypt allocates
+baml.crypto.Aes256GcmSiv.new allocates
+baml.crypto.Aead$for$Aes256GcmSiv.encrypt allocates
+baml.crypto.Aead$for$Aes256GcmSiv.decrypt allocates
+baml.crypto.ChaCha20Poly1305.new allocates
+baml.crypto.Aead$for$ChaCha20Poly1305.encrypt allocates
+baml.crypto.Aead$for$ChaCha20Poly1305.decrypt allocates
+baml.crypto.XChaCha20Poly1305.new allocates
+baml.crypto.Aead$for$XChaCha20Poly1305.encrypt allocates
+baml.crypto.Aead$for$XChaCha20Poly1305.decrypt allocates

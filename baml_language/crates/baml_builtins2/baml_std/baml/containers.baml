@@ -286,6 +286,84 @@ class Array<T> {
         $rust_function
     }
 
+    /// `sort_by` as a loop, for code that cannot call a closure from Rust:
+    /// natively compiled code runs it in place of `sort_by`. It behaves
+    /// exactly as `sort_by` does: the same merges of the same runs, the same
+    /// calls in the same order, the same result, written back only once the
+    /// whole sort is done. The optimizer does not copy it into callers.
+    function _driver_sort_by<E>(
+        self,
+        compare: (T, T) -> root.ops.Ordering throws E,
+    ) -> T[] throws E {
+        let n = self.length();
+        let source = self._copy();
+        if (n > 1) {
+            let merged = self._copy();
+            let width = 1;
+            while (width < n) {
+                let start = 0;
+                while (start < n) {
+                    let middle = start + width;
+                    if (middle > n) {
+                        middle = n;
+                    }
+                    let end = middle + width;
+                    if (end > n) {
+                        end = n;
+                    }
+                    let left = start;
+                    let right = middle;
+                    let k = start;
+                    while (left < middle && right < end) {
+                        let a = source[left];
+                        let b = source[right];
+                        // The left run's element unless it strictly follows
+                        // the right run's: equal elements keep their order.
+                        if (compare(a, b) == root.ops.Ordering.Greater) {
+                            merged[k] = b;
+                            right += 1;
+                        } else {
+                            merged[k] = a;
+                            left += 1;
+                        }
+                        k += 1;
+                    }
+                    while (left < middle) {
+                        merged[k] = source[left];
+                        left += 1;
+                        k += 1;
+                    }
+                    while (right < end) {
+                        merged[k] = source[right];
+                        right += 1;
+                        k += 1;
+                    }
+                    start = end;
+                }
+                let done = source;
+                source = merged;
+                merged = done;
+                width = width * 2;
+            }
+        }
+        // The array is given the sorted elements whatever the comparator
+        // did to it meanwhile.
+        if (self.length() > n) {
+            self._truncate(n);
+        }
+        let held = self.length();
+        let i = 0;
+        while (i < n) {
+            if (i < held) {
+                self[i] = source[i];
+            } else {
+                self.push(source[i]);
+            }
+            i += 1;
+        }
+        self
+    }
+
     /// Sorts the array in place by a key, then returns `self` — the same array
     /// object, not a copy.
     ///
@@ -587,6 +665,24 @@ class Array<T> {
         $rust_function
     }
 
+    /// `find_last` as a loop, for code that cannot call a closure from Rust:
+    /// natively compiled code runs it in place of `find_last`. It behaves
+    /// exactly as `find_last` does: the same elements, the same calls in the
+    /// same order, the same result. The optimizer does not copy it into
+    /// callers.
+    function _driver_find_last<E>(self, predicate: (T) -> bool throws E) -> T? throws E {
+        let items = self._copy();
+        let i = items.length() - 1;
+        while (i >= 0) {
+            let x = items[i];
+            if (predicate(x)) {
+                return x;
+            }
+            i -= 1;
+        }
+        null
+    }
+
     /// Returns the index of the *last* element matching `predicate`, or `null`
     /// if none does.
     ///
@@ -601,6 +697,23 @@ class Array<T> {
     //baml:may_yield
     function find_last_index<E>(self, predicate: (T) -> bool throws E) -> int? throws E {
         $rust_function
+    }
+
+    /// `find_last_index` as a loop, for code that cannot call a closure from Rust:
+    /// natively compiled code runs it in place of `find_last_index`. It behaves
+    /// exactly as `find_last_index` does: the same elements, the same calls in the
+    /// same order, the same result. The optimizer does not copy it into
+    /// callers.
+    function _driver_find_last_index<E>(self, predicate: (T) -> bool throws E) -> int? throws E {
+        let items = self._copy();
+        let i = items.length() - 1;
+        while (i >= 0) {
+            if (predicate(items[i])) {
+                return i;
+            }
+            i -= 1;
+        }
+        null
     }
 
     /// Returns `true` if the array contains an element equal to `item`. Scans
@@ -713,6 +826,30 @@ class Array<T> {
     //baml:may_yield
     function flat_map<U, E>(self, f: (T) -> U[] throws E) -> U[] throws E {
         $rust_function
+    }
+
+    /// `flat_map` as a loop, for code that cannot call a closure from Rust:
+    /// natively compiled code runs it in place of `flat_map`. It behaves
+    /// exactly as `flat_map` does: the same elements, the same calls in the
+    /// same order, the same result. The optimizer does not copy it into
+    /// callers.
+    function _driver_flat_map<U, E>(self, f: (T) -> U[] throws E) -> U[] throws E {
+        let items = self._copy();
+        let out = items._results<U>();
+        out._truncate(0);
+        let n = items.length();
+        let i = 0;
+        while (i < n) {
+            let inner = f(items[i]);
+            let m = inner.length();
+            let j = 0;
+            while (j < m) {
+                out.push(inner[j]);
+                j += 1;
+            }
+            i += 1;
+        }
+        out
     }
 
     /// Removes every element, leaving `length() == 0`.

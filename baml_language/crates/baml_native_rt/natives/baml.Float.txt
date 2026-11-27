@@ -1,0 +1,43 @@
+# Natives of `baml.Float`, implemented in `src/native/float.rs`.
+baml.Float.is_nan
+baml.Float.is_infinite
+baml.Float.signum
+baml.Float.sqrt
+baml.Float.abs
+baml.Float.floor
+baml.Float.ceil
+baml.Float.round
+baml.Float.trunc
+baml.Float.fract
+baml.Float.log10
+baml.Float.cbrt
+baml.Float.sin
+baml.Float.cos
+baml.Float.tan
+baml.Float.asin
+baml.Float.acos
+baml.Float.atan
+baml.Float.sinh
+baml.Float.cosh
+baml.Float.tanh
+baml.Float.asinh
+baml.Float.acosh
+baml.Float.atanh
+baml.Float.pow
+baml.Float.log
+baml.Float.hypot
+baml.Float.atan2
+baml.Float._unit_from_draw
+baml.Float.pi
+baml.Float.e
+baml.Float.golden_ratio
+baml.Float.nan
+baml.Float.inf
+baml.Float.max_finite
+baml.Float.min_finite
+baml.Float.epsilon
+baml.Float.ifloor allocates
+baml.Float.iceil allocates
+baml.Float.iround allocates
+baml.Float.itrunc allocates
+baml.Float.parse allocates

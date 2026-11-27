@@ -1,0 +1,6 @@
+# Natives of `baml.path`, implemented in `src/native/path.rs`. The standard
+# library declares them as I/O, and none of them reads a file.
+baml.path.join allocates
+baml.path.parent allocates
+baml.path.is_absolute
+baml.path._absolute allocates

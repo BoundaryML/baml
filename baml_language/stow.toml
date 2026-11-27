@@ -89,6 +89,32 @@ allowed_crates = ["baml_tests"]
 regular_deps_only = true
 reason = "Precompiled stdlib test helpers belong in dev-dependencies."
 
+# The Cranelift code generator belongs to the native backend alone.
+[[dependency_rules]]
+pattern = "cranelift-codegen"
+allowed_crates = ["baml_compiler2_native"]
+reason = "Only the native backend generates machine code; go through baml_compiler2_native."
+
+[[dependency_rules]]
+pattern = "cranelift-frontend"
+allowed_crates = ["baml_compiler2_native"]
+reason = "Only the native backend generates machine code; go through baml_compiler2_native."
+
+[[dependency_rules]]
+pattern = "cranelift-module"
+allowed_crates = ["baml_compiler2_native"]
+reason = "Only the native backend generates machine code; go through baml_compiler2_native."
+
+[[dependency_rules]]
+pattern = "cranelift-native"
+allowed_crates = ["baml_compiler2_native"]
+reason = "Only the native backend generates machine code; go through baml_compiler2_native."
+
+[[dependency_rules]]
+pattern = "cranelift-object"
+allowed_crates = ["baml_compiler2_native"]
+reason = "Only the native backend generates machine code; go through baml_compiler2_native."
+
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
@@ -98,7 +124,8 @@ name = "baml"
 approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt", "syntax", "parser"]
 # The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
 # the same shape), not a prefix + word.
-approved_suffixes = ["artifact", "compiler2_hir_ty", "project_root", "test_support"]
+# `native_rt` is the runtime archive natively compiled programs link against.
+approved_suffixes = ["artifact", "compiler2_hir_ty", "native_rt", "project_root", "test_support"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]
 # The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring
@@ -132,7 +159,9 @@ pattern.exclude = ["bex_vm_types"]
 # `baml_query_btel` uses it only in [dev-dependencies]: its integration
 # tests run real engine programs (bex_engine, bex_heap, bex_vm_types)
 # to record executions and exercise GC. Its [dependencies] stay
-# btel_*-only. Keep both allowlists in sync.
+# btel_*-only. `baml_compiler2_native` uses the same exception for its
+# differential tests, which run each program on the interpreter to compare
+# against the native executable. Keep both allowlists in sync.
 allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host"]
 regular_deps_only = true
 reason = "baml_* crates should not depend on bex_* crates."
@@ -140,8 +169,8 @@ reason = "baml_* crates should not depend on bex_* crates."
 [[namespaces.dependency_rules]]
 pattern.select = "bex_*"
 pattern.exclude = ["bex_vm_types"]
-allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel"]
-reason = "baml_* crates should not depend on bex_* crates (baml_query_btel: non-production dev/build dependencies only)."
+allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel", "baml_compiler2_native"]
+reason = "baml_* crates should not depend on bex_* crates (baml_query_btel, baml_compiler2_native: non-production dev/build dependencies only)."
 
 # `baml_linker_types` carries the compilation-unit wire format over the
 # runtime's object types, and `baml_linker` folds units into a `Program`:

@@ -1,0 +1,13 @@
+# Natives of `baml.Map`, implemented in `src/native/map.rs` over
+# `src/map.rs`.
+#
+# `index` is compiled inline: a probe, and a panic when it finds nothing.
+baml.Map.length
+baml.Map.has
+baml.Map.get
+baml.Map.delete
+baml.Map.clear
+baml.Map.set allocates
+baml.Map.get_or_insert allocates
+baml.Map.keys allocates
+baml.Map.values allocates

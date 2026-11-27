@@ -89,10 +89,13 @@ fn inline_body<'db>(
     opt: OptLevel,
 ) -> bool {
     let mut growth = 0;
+    let mut rewritten = false;
     let mut index = 0;
     while index < body.blocks.len() {
         let site = BlockId(index);
         read_known_fields(db, body, arity, site, &mut growth);
+        rewritten |= name_known_functions(db, &mut body.blocks[index]);
+        rewritten |= pass_literal_defaults(db, &mut body.blocks[index]);
         // An interface call on a receiver of a known class is tried as the
         // direct call of what that class provides, and put back if the
         // callee turns out to keep its call.
@@ -112,7 +115,7 @@ fn inline_body<'db>(
         }
         index += 1;
     }
-    growth > 0
+    growth > 0 || rewritten
 }
 
 /// Replace the interface call ending `site` with a direct call of the
@@ -163,6 +166,83 @@ fn resolve_dispatch<'db>(
         target,
         unwind,
     })
+}
+
+/// Turn each interface method taken as a value from a type that is known
+/// where the code is written into the function that type provides.
+fn name_known_functions<'db>(db: &'db dyn crate::Db, block: &mut BasicBlock<'db>) -> bool {
+    let mut named = false;
+    for statement in &mut block.statements {
+        if let StatementKind::Assign { value, .. } = &mut statement.kind
+            && let Rvalue::MakeVirtualFunction {
+                self_ty,
+                iface,
+                method,
+                type_args,
+            } = value
+            && type_args.is_empty()
+            && let Some(function) = devirtualize::provided(db, self_ty, iface, method)
+        {
+            *value = Rvalue::Use(Operand::Constant(Constant::Function(DeclRef::Source(
+                function,
+            ))));
+            named = true;
+        }
+    }
+    named
+}
+
+/// Where the call ending `block` names its callee and leaves a parameter to
+/// a default that is an `int` or `float` literal, pass the literal. The
+/// callee's entry puts the same value there when it finds the parameter
+/// omitted, and no word of an `int` or a `float` is free to say "omitted"
+/// in a register.
+fn pass_literal_defaults<'db>(db: &'db dyn crate::Db, block: &mut BasicBlock<'db>) -> bool {
+    let Some(Terminator::Call {
+        callee: Operand::Constant(Constant::Function(DeclRef::Source(function))),
+        args,
+        ntypeargs,
+        ..
+    }) = &mut block.terminator
+    else {
+        return false;
+    };
+    let defaults = baml_compiler2_hir::signature::function_parameter_defaults(db, *function);
+    let mut passed = false;
+    for (parameter, argument) in args[*ntypeargs..].iter_mut().enumerate() {
+        if !matches!(argument, Operand::Constant(Constant::OmittedArg)) {
+            continue;
+        }
+        let Some(default) = defaults.param_default(parameter) else {
+            continue;
+        };
+        let exprs = &defaults.defaults.exprs.exprs;
+        let (negated, written) = match &exprs[default.expr.expr()] {
+            baml_compiler2_ast::Expr::Unary {
+                op: baml_compiler2_ast::UnaryOp::Neg,
+                expr,
+            } => (true, &exprs[*expr]),
+            written => (false, written),
+        };
+        let literal = match written {
+            baml_compiler2_ast::Expr::Literal(baml_base::Literal::Int(value)) if negated => {
+                value.checked_neg().map(Constant::Int)
+            }
+            baml_compiler2_ast::Expr::Literal(baml_base::Literal::Int(value)) => {
+                Some(Constant::Int(*value))
+            }
+            baml_compiler2_ast::Expr::Literal(baml_base::Literal::Float(text)) => text
+                .parse::<f64>()
+                .ok()
+                .map(|value| Constant::Float(if negated { -value } else { value })),
+            _ => None,
+        };
+        if let Some(literal) = literal {
+            *argument = Operand::Constant(literal);
+            passed = true;
+        }
+    }
+    passed
 }
 
 /// Turn each interface field read in `site` whose receiver's class is known
@@ -449,9 +529,33 @@ fn named_callee<'db>(
 /// of the same class named `_inlined_` and then its name. It takes the same
 /// parameters and type parameters, and does exactly what the method does.
 #[salsa::tracked(returns(clone))]
-pub(crate) fn loop_form<'db>(
+pub fn loop_form<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
+) -> Option<FunctionLoc<'db>> {
+    sibling(db, function, "_inlined_")
+}
+
+/// The driver of a standard library method written in Rust that calls a
+/// closure: the method of the same class named `_driver_` and then its
+/// name, which does exactly what the method does. It is for a backend that
+/// cannot call a closure from Rust. The inliner does not use it: a method
+/// has a driver and no loop form where the loop is no faster in the
+/// interpreter than the Rust function.
+#[salsa::tracked(returns(clone))]
+pub fn driver_form<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Option<FunctionLoc<'db>> {
+    sibling(db, function, "_driver_")
+}
+
+/// The method of a standard library method's class named `prefix` and then
+/// the method's name.
+fn sibling<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+    prefix: &str,
 ) -> Option<FunctionLoc<'db>> {
     use baml_compiler2_hir::item_data::{MethodOwner, class_data, method_owner};
     if function.file(db).source_root(db).kind(db) != baml_base::SourceRootKind::Stdlib {
@@ -460,7 +564,7 @@ pub(crate) fn loop_form<'db>(
     let MethodOwner::Class(class) = method_owner(db, function)? else {
         return None;
     };
-    let name = format!("_inlined_{}", function_data(db, function).name);
+    let name = format!("{prefix}{}", function_data(db, function).name);
     class_data(db, class)
         .methods
         .iter()

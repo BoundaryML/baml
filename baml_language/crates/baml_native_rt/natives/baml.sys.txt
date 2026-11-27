@@ -1,0 +1,14 @@
+# Natives of `baml.sys`, implemented in `src/native/sys.rs`. What the
+# process knows of itself is answered where it is asked: only running a
+# program waits. `_sleep` is compiled as a wait on the worker's timers.
+baml.sys.argv allocates
+baml.sys.pid
+baml.sys.current_dir allocates
+baml.sys.current_exe allocates
+baml.sys.home_dir allocates
+baml.sys.platform allocates
+baml.sys.host_target allocates
+baml.sys.host_info allocates
+baml.sys.collect_garbage allocates
+baml.sys._run async
+baml.sys._shell async

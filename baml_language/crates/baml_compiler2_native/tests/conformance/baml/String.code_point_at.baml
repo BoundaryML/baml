@@ -1,0 +1,10 @@
+function string_code_point_at_first() -> int { rep("hello", 2).code_point_at(0) ?? -1 }
+function string_code_point_at_last() -> int { rep("hello", 2).code_point_at(9) ?? -1 }
+function string_code_point_at_past_end() -> int { rep("hello", 2).code_point_at(10) ?? -1 }
+function string_code_point_at_negative() -> int { rep("hello", 2).code_point_at(-2) ?? -1 }
+function string_code_point_at_negative_past() -> int { rep("hello", 2).code_point_at(-11) ?? -1 }
+function string_code_point_at_wide() -> int { rep("é1😀", 2).code_point_at(2) ?? -1 }
+function string_code_point_at_wide_negative() -> int { rep("é1😀", 2).code_point_at(-3) ?? -1 }
+function string_code_point_at_wide_past_end() -> int { rep("é1😀", 2).code_point_at(6) ?? -1 }
+function string_code_point_at_nul() -> bool { rep("\u{0}", 1).code_point_at(0) == null }
+function string_code_point_at_empty() -> int { rep("", 1).code_point_at(0) ?? -1 }

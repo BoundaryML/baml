@@ -4,6 +4,7 @@ mod codegen_io;
 mod codegen_panics;
 mod extract;
 mod lang_item;
+mod native_abi;
 mod rust_ident;
 mod types;
 
@@ -16,6 +17,9 @@ pub use codegen_io::{
 pub use codegen_panics::generate_panic_enums;
 pub use extract::{
     ExtractNativeBuiltinsError, extract_native_builtins, extract_native_builtins_for,
+};
+pub use native_abi::{
+    NativeFlags, NativeListEntry, generate_native_shims, generate_native_table, read_native_lists,
 };
 pub use types::{
     BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,

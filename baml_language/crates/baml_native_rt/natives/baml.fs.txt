@@ -1,0 +1,28 @@
+# Natives of `baml.fs`, implemented in `src/native/fs.rs`. A `File` and a
+# `Lock` own what the operating system gave them as Rust state.
+baml.fs.open async
+baml.fs.exists async
+baml.fs.remove async
+baml.fs.size async
+baml.fs.read async
+baml.fs.write async
+baml.fs.write_bytes async
+baml.fs.read_dir async
+baml.fs.mkdir async
+baml.fs.remove_dir async
+baml.fs.remove_dir_all async
+baml.fs.chmod async
+baml.fs.symlink async
+baml.fs.metadata async
+baml.fs.rename async
+baml.fs.canonicalize async
+baml.fs.write_atomic async
+baml.fs.lock async
+baml.fs.File.close async
+baml.fs.File.seek_from async
+baml.fs.baml.io.Read$for$File.read async
+baml.fs.baml.io.Read$for$File.bytes async
+baml.fs.baml.io.Write$for$File.write_some async
+baml.fs.baml.io.Write$for$File.flush async
+# Dropping the locked file gives the lock back: nothing to wait for.
+baml.fs.Lock.close

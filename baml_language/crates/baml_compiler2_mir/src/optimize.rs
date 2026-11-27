@@ -24,6 +24,7 @@ mod redundancy;
 mod scalar_replace;
 mod values;
 
+pub use inline::{driver_form, loop_form};
 pub use values::live_in_precise;
 
 /// Run all optimization passes on a MIR function.

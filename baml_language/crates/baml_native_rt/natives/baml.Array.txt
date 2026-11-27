@@ -1,0 +1,20 @@
+# Natives of `baml.Array`, implemented in `src/native/array.rs`.
+#
+# `length`, `push` and indexing are compiled inline. A method that takes a
+# closure is compiled from its loop form in the standard library.
+baml.Array.pop
+baml.Array.shift
+baml.Array.remove_at
+baml.Array.clear
+baml.Array._truncate
+baml.Array.at
+baml.Array.reverse allocates
+baml.Array.slice allocates
+baml.Array.concat allocates
+baml.Array._copy allocates
+baml.Array._results allocates
+baml.Array.filled allocates
+baml.Array.unshift allocates
+baml.Array.insert allocates
+baml.Array.splice allocates
+baml.Array.join allocates

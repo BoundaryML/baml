@@ -1,0 +1,13 @@
+# Natives of `baml.sync`, implemented in `src/native/sync.rs`: the
+# semaphore, whose counts and queue are Rust state. Only the wait for a
+# hold stops. `atomic` and its four natives are not ported.
+baml.sync.Semaphore.new allocates
+baml.sync.Semaphore.capacity
+baml.sync.Semaphore.active_count
+baml.sync.Semaphore.queued_count
+baml.sync.Semaphore._admit allocates
+baml.sync.Permit.release
+baml.sync._admitted
+baml.sync._wait_permit async
+baml.sync._permit allocates
+baml.sync._release_permit

@@ -496,6 +496,37 @@ pub(super) fn method<'db>(
     }
 }
 
+/// The function `interface`'s `method` names on the type `subject`, when
+/// that is a class without type parameters whose implementation, also
+/// without any, provides the method in source: a function with no frame,
+/// which a function constant names as well as the interface does.
+pub(super) fn provided<'db>(
+    db: &'db dyn crate::Db,
+    subject: &TyTemplate,
+    interface: &TyTemplateInterface,
+    method: &str,
+) -> Option<FunctionLoc<'db>> {
+    let TyTemplate::Class(head, arguments) = subject else {
+        return None;
+    };
+    if !arguments.is_empty() {
+        return None;
+    }
+    let class = KnownClass {
+        class: layout::class_ref_of(db, head)?,
+        args: Vec::new(),
+    };
+    let (concrete, goal) = goal(db, &class, interface)?;
+    let resolved = resolve_impl(db, &concrete, &goal)?;
+    if !resolved.facts.generic_params().is_empty() {
+        return None;
+    }
+    match resolved.provided_method(db, &Name::new(method))? {
+        DeclRef::Source(function) => Some(function),
+        DeclRef::External(_) => None,
+    }
+}
+
 /// The slot of `class` that `interface`'s field `field` is linked to: the
 /// class field its `implements` block names for it, or the class field of
 /// the same name.

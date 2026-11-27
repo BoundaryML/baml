@@ -1,0 +1,65 @@
+[package]
+name = "baml_native_rt"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+description = "Runtime linked into natively compiled BAML programs"
+
+[lib]
+# `baml_compiler2_native` builds this package into the archive it links
+# programs against, with a nested `cargo` and its own profile. The `rlib`
+# is for the documentation tests, which are how the crate checks that what
+# must not compile does not.
+crate-type = [ "staticlib", "rlib" ]
+
+[features]
+default = [ "aws-crypto" ]
+# What a test build of a program links: migration stress, and the checks of
+# a parking task's stack and of a frame without a stack map. A build with
+# debug assertions has them too. See `build.rs`.
+checks = [  ]
+# `baml.http`. The compiler builds the runtime with it and without, and
+# links the one without into a program that calls no native of `baml.http`:
+# see `natives/README.md`.
+http = [ "dep:aws-smithy-eventstream", "dep:btel_settings", "dep:reqwest", "dep:rustls" ]
+# The TLS provider of `baml.http`, chosen by the same features and with the
+# same settings of `reqwest` and `rustls` as `sys_native` chooses it.
+aws-crypto = [ "http", "reqwest/rustls", "rustls/aws_lc_rs", "rustls/std" ]
+ring-crypto = [ "http", "reqwest/rustls-no-provider", "rustls/ring", "rustls/std" ]
+
+[dependencies]
+btel_settings = { workspace = true, optional = true }
+sys_glob = { workspace = true }
+sys_regex = { workspace = true }
+aes-gcm-siv = { workspace = true }
+aws-smithy-eventstream = { workspace = true, optional = true }
+base64 = { workspace = true }
+chacha20poly1305 = { workspace = true }
+getrandom = { workspace = true }
+jiff = { workspace = true }
+num-bigint = { workspace = true }
+rand_chacha = { workspace = true }
+rand_core = { workspace = true }
+rand_xoshiro = { workspace = true }
+reqwest = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true, features = [ "fs", "io-util", "net", "process", "rt-multi-thread", "sync", "time" ] }
+zmij = { workspace = true }
+
+[build-dependencies]
+baml_builtins2_codegen = { workspace = true }
+
+[lints]
+workspace = true
+
+[package.metadata.ci]
+wasm_support = false

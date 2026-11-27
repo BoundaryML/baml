@@ -1,0 +1,13 @@
+# Natives of `baml.Int`, implemented in `src/native/int.rs`.
+baml.Int.abs allocates
+baml.Int.isqrt allocates
+baml.Int.pow
+baml.Int.ilog allocates
+baml.Int.leading_zeros
+baml.Int.leading_ones
+baml.Int.trailing_zeros
+baml.Int.trailing_ones
+baml.Int.count_zeros
+baml.Int.count_ones
+baml.Int.parse allocates
+baml.Int._random_in_range

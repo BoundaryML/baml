@@ -1,0 +1,256 @@
+//! The runtime a natively compiled BAML program links against.
+//!
+//! Compiled code reaches it only through the `baml_rt_*` symbols, all with
+//! the C calling convention but the slow paths in [`stubs`], which preserve
+//! every register. The compiled object defines two symbols in the
+//! other direction: `baml_native_entry`, which runs the program's entry
+//! function and hands its result to one of the `baml_rt_print_*` functions,
+//! and the two tables the collector reads: `baml_native_stack_maps`, where
+//! compiled frames keep their references, and `baml_native_types`, the
+//! class objects the runtime knows by name and the descriptions of the
+//! program's types. A throw reads two more, `baml_native_unwind`
+//! and `baml_native_functions`: see [`unwind`]. A spawned task starts in
+//! `baml_native_task_shim`: see [`sched`].
+//!
+//! The standard library's natives are in [`native`]: their symbols are
+//! generated from the standard library's own declarations.
+
+#![expect(
+    unsafe_code,
+    reason = "the runtime is the unsafe half of compiled code: raw objects, raw frames, C entry points"
+)]
+
+pub mod array;
+pub mod bigint;
+pub mod bytes;
+mod class;
+mod describe;
+pub mod heap;
+pub mod json_layout;
+pub mod layout;
+pub mod map;
+pub mod native;
+pub mod sched;
+pub mod string;
+pub mod stubs;
+mod ty;
+mod types;
+pub mod unwind;
+
+use std::io::Write;
+
+#[cfg(not(test))]
+use heap::{Mutator, Program};
+
+/// The exit status of a program that ended in an uncaught panic, matching
+/// what `baml run` exits with.
+const UNCAUGHT_EXIT_STATUS: i32 = 1;
+
+/// Set in the environment to collect on every allocation.
+#[cfg(not(test))]
+const GC_STRESS_VARIABLE: &str = "BAML_GC_STRESS";
+
+/// Set in the environment to have every task that stops go on on another
+/// thread and under a worker at another address: see
+/// `sched::serve_in_turns`. Only the runtime a test build links can.
+#[cfg(not(test))]
+const MIGRATE_STRESS_VARIABLE: &str = "BAML_MIGRATE_STRESS";
+
+#[cfg(not(test))]
+unsafe extern "C" {
+    /// Defined by the compiled program: what its first task starts in. It
+    /// runs the entry function and prints the result.
+    fn baml_native_entry(mutator: *mut std::ffi::c_void);
+    /// Defined by the compiled program: what every task it spawns starts
+    /// in. It runs the task's closure and settles the task's future.
+    fn baml_native_task_shim(mutator: *mut std::ffi::c_void);
+    /// Defined by the compiled program: the first word of its stack maps.
+    static baml_native_stack_maps: usize;
+    /// Defined by the compiled program: the first word of its table of
+    /// types.
+    static baml_native_types: usize;
+    /// Defined by the compiled program: its table of calls with a handler.
+    static baml_native_unwind: usize;
+    /// Defined by the compiled program: its function table.
+    static baml_native_functions: usize;
+}
+
+#[cfg(not(test))]
+unsafe extern "C" {
+    fn signal(signal: i32, handler: usize) -> usize;
+    fn _exit(status: i32) -> !;
+}
+
+/// The two signals that ask a program to stop, the same number on every
+/// system the runtime is built for.
+#[cfg(not(test))]
+const SIGINT: i32 = 2;
+#[cfg(not(test))]
+const SIGTERM: i32 = 15;
+/// The disposition of a signal that is ignored.
+#[cfg(not(test))]
+const SIG_IGN: usize = 1;
+
+/// End the process as a shell reports a death by `signal`: with 128 more
+/// than its number. Async-signal-safe: it calls `_exit` alone. Nothing
+/// written to stdout is lost, since every write to it flushes before it
+/// returns.
+#[cfg(not(test))]
+extern "C" fn stopped(signal: i32) {
+    // SAFETY: `_exit` may be called from a signal handler.
+    unsafe { _exit(128 + signal) }
+}
+
+/// Process entry point.
+#[cfg(not(test))]
+#[unsafe(no_mangle)]
+pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
+    for stop in [SIGINT, SIGTERM] {
+        // SAFETY: a handler that is async-signal-safe. A signal the
+        // program was started ignoring stays ignored.
+        unsafe {
+            if signal(stop, stopped as *const () as usize) == SIG_IGN {
+                signal(stop, SIG_IGN);
+            }
+        }
+    }
+    let stress = std::env::var_os(GC_STRESS_VARIABLE).is_some();
+    let migrate = std::env::var_os(MIGRATE_STRESS_VARIABLE).is_some();
+    // SAFETY: the linked program defines both symbols as declared.
+    unsafe {
+        let program = Program {
+            stack_maps: &raw const baml_native_stack_maps as usize,
+            types: &raw const baml_native_types as usize,
+            unwind: &raw const baml_native_unwind as usize,
+            functions: &raw const baml_native_functions as usize,
+        };
+        map::randomize_seed();
+        let mut mutator = Mutator::new(program, stress);
+        // The entry function runs as a task, like everything it spawns.
+        let status = sched::run(
+            &raw mut mutator,
+            baml_native_entry as *const () as usize,
+            baml_native_task_shim as *const () as usize,
+            migrate,
+        );
+        mutator.drop_owned();
+        status
+    }
+}
+
+/// An `int` result, as `baml run` prints it.
+pub fn int_text(value: i64) -> String {
+    value.to_string()
+}
+
+/// A `float` result, as `baml run` prints it: the shortest decimal that
+/// round-trips, never in exponent form, with `.0` appended to a finite value
+/// that would otherwise read as an integer.
+pub fn float_text(value: f64) -> String {
+    let text = value.to_string();
+    if text.contains('.') || !value.is_finite() {
+        text
+    } else {
+        format!("{text}.0")
+    }
+}
+
+fn print_line(text: &str) {
+    let mut out = std::io::stdout().lock();
+    // A closed stdout is not an error the program can act on.
+    let _ = writeln!(out, "{text}");
+}
+
+/// Report an uncaught throw on stderr and end the process.
+#[expect(clippy::exit, reason = "an uncaught panic ends the program")]
+fn uncaught(thrown: &str) -> ! {
+    let _ = std::io::stdout().flush();
+    let _ = writeln!(std::io::stderr().lock(), "error: uncaught throw: {thrown}");
+    std::process::exit(UNCAUGHT_EXIT_STATUS)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn baml_rt_print_int(value: i64) {
+    print_line(&int_text(value));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn baml_rt_print_float(value: f64) {
+    print_line(&float_text(value));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn baml_rt_print_bool(value: u8) {
+    print_line(if value == 0 { "false" } else { "true" });
+}
+
+/// Print a `string` result as `baml run` does: quoted, with escapes.
+///
+/// # Safety
+///
+/// `value` is a live string object.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_rt_print_string(value: usize) {
+    // SAFETY: the caller's contract.
+    print_line(&format!("{:?}", unsafe { string::text(value) }));
+}
+
+/// Print an enum result as `baml run` does: the variant's name.
+///
+/// # Safety
+///
+/// Called from compiled code with a live variant object.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_rt_print_enum(variant: usize) {
+    // SAFETY: the caller's contract.
+    print_line(unsafe { class::variant_name(variant) });
+}
+
+/// Float remainder with the sign of the dividend, the `%` of `float`.
+#[unsafe(no_mangle)]
+pub extern "C" fn baml_rt_float_rem(left: f64, right: f64) -> f64 {
+    left % right
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    use crate::{
+        json_layout::JSON_BODY,
+        layout::{PROGRAM_DESCRIPTIONS, WORD},
+    };
+
+    /// A stack map table of a program with no compiled code: no call holds
+    /// a reference, and no call holds none.
+    pub(crate) static NO_STACK_MAPS: [usize; 2] = [0; 2];
+
+    /// The table of types of a program with no class and no enum: no
+    /// class object, and a section of descriptions that is only its
+    /// header.
+    pub(crate) static NO_TYPES: [usize; (PROGRAM_DESCRIPTIONS + JSON_BODY) / WORD] =
+        [0; (PROGRAM_DESCRIPTIONS + JSON_BODY) / WORD];
+
+    /// Run the ignored test at `path` in a process of its own, which it
+    /// does not survive, and return what it wrote to stderr.
+    pub(crate) fn in_a_process_of_its_own(path: &str) -> String {
+        let output = std::process::Command::new(std::env::current_exe().expect("the test binary"))
+            .args(["--exact", path, "--ignored", "--nocapture"])
+            .output()
+            .expect("the test binary starts");
+        assert!(!output.status.success(), "`{path}` ends its process");
+        String::from_utf8_lossy(&output.stderr).into_owned()
+    }
+
+    #[test]
+    fn floats_print_as_baml_run_prints_them() {
+        assert_eq!(float_text(6.5), "6.5");
+        assert_eq!(float_text(2.0), "2.0");
+        assert_eq!(float_text(-0.0), "-0.0");
+        assert_eq!(float_text(1e22), "10000000000000000000000.0");
+        assert_eq!(float_text(0.1 + 0.2), "0.30000000000000004");
+        assert_eq!(float_text(1.0 / 3.0 * 1e-7), "0.00000003333333333333333");
+        assert_eq!(float_text(f64::INFINITY), "inf");
+        assert_eq!(float_text(f64::NEG_INFINITY), "-inf");
+        assert_eq!(float_text(f64::NAN), "NaN");
+    }
+}
