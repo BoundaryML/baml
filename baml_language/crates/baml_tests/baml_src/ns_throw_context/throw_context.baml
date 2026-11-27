@@ -193,3 +193,40 @@ test "throw_context_union_alias_members" {
     assert.equal(one, "one")
     assert.equal(throwNoAliasMember(), 1)
 }
+
+function throwAliasAndString(x: int) -> int throws SendError | string {
+    if (x < 0) {
+        throw BaseError { code: "negative" };
+    }
+    if (x > 9) {
+        throw "limit";
+    }
+    x
+}
+
+type ElementCode = int;
+
+type ElementCodes = ElementCode[];
+
+function throwNestedAlias(codes: int[]) -> int throws ElementCodes {
+    throw codes;
+}
+
+test "throw_context_alias_in_union_and_container" {
+    let base = throwAliasAndString(-1) catch (e) {
+        BaseError => e.code,
+        LimitError => "wrong",
+        string => e,
+    };
+    assert.equal(base, "negative")
+    let limit = throwAliasAndString(10) catch (e) {
+        BaseError => "wrong",
+        LimitError => "wrong",
+        string => e,
+    };
+    assert.equal(limit, "limit")
+    let size = throwNestedAlias([1, 2]) catch (e) {
+        int[] => e.length(),
+    };
+    assert.equal(size, 2)
+}

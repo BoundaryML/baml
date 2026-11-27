@@ -12480,7 +12480,32 @@ impl<'db> InferenceContext<'db> {
         } else {
             self.plain_finalized(&declared)
         };
-        let declared_facts = crate::package_interface::flatten_ty_to_facts(&declared_for_coverage);
+        // Finalizing a union expands its alias members (`SendError |
+        // string` becomes `BaseError | LimitError | string`), so the aliases
+        // come from the written surface and the members they stand for
+        // leave the per-fact judgment below.
+        let written_aliases: Vec<baml_type::Ty> =
+            crate::package_interface::flatten_ty_to_facts(&rendered_plain(&declared))
+                .into_iter()
+                .filter(|fact| matches!(fact, baml_type::Ty::TypeAlias(..)))
+                .collect();
+        let alias_members: std::collections::BTreeSet<baml_type::Ty> = written_aliases
+            .iter()
+            .flat_map(|alias| self.alias_member_facts(alias))
+            .collect();
+        let declared_facts: std::collections::BTreeSet<baml_type::Ty> = written_aliases
+            .iter()
+            .cloned()
+            .chain(
+                crate::package_interface::flatten_ty_to_facts(&declared_for_coverage)
+                    .into_iter()
+                    .filter(|fact| {
+                        crate::throw_facts::flatten_declared_ty_to_facts(fact)
+                            .iter()
+                            .any(|leaf| !alias_members.contains(leaf))
+                    }),
+            )
+            .collect();
         let effective: std::collections::BTreeSet<baml_type::Ty> = contributions
             .iter()
             .flat_map(|(_, ty)| {
@@ -12537,10 +12562,18 @@ impl<'db> InferenceContext<'db> {
             .iter()
             .flat_map(|fact| self.alias_member_facts(fact))
             .collect();
+        // Exact membership misses an alias nested in a container
+        // (`Element[]` for a thrown `int[]`), so a fact also counts as
+        // thrown when a thrown fact is equivalent to it. Equivalence, not
+        // mutual subtyping: an unresolved `throw []` is compatible with
+        // every list type but covers none of them.
         let leaf_covered = |leaf: &baml_type::Ty| {
             effective.contains(leaf)
                 || effective_members.contains(leaf)
                 || relaxed.contains(leaf)
+                || effective
+                    .iter()
+                    .any(|eff| baml_type::normalize::equivalent(eff, leaf, &self.facts))
                 || matches!(leaf, baml_type::Ty::Interface(..))
                     && effective
                         .iter()
