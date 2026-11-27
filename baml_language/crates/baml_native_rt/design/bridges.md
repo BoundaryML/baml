@@ -1,18 +1,17 @@
 # Bridges: calling compiled BAML from Python, Node and Rust
 
-A bridge lets a program in another language call a BAML function and get a typed result back. This note says how that works when BAML is compiled to machine code: what is decided, what is built, and what comes next.
+A bridge lets a program in another language call a BAML function and get a typed result back. This note says how that works when BAML is compiled to machine code: what is decided, what is built, what it costs, and what comes next.
 
-Status, on branch `antoniosarosi/native-bridges-poc`, step 1:
+Status, on branch `antoniosarosi/native-bridges-poc`:
 
 | Part | State |
 |---|---|
 | The compiled program as a shared library, and the C functions it exports | Built, behind the runtime feature `host-lib` |
-| A Rust host that loads the library and awaits calls | Built, as an example |
 | Reading any exported value out and building any argument in, checked | Built |
-| The library's interface as data: numbers, fields, variants, hash (`native_pack --lib --describe`) | Built |
-| Copying results into host objects | Built for Rust: the crate `baml_native_host`, and bindings for the type-shapes fixture written by hand as a generator would emit them |
-| Generated bindings for Rust, Python and Node | Next. Not built |
-| Calls from BAML into the host, streaming, cancellation | Not designed |
+| The library's interface as data, with a typed tree of every type (`native_pack --lib --describe`) | Built |
+| A support library per language | Built: `baml_native_host` (Rust; its core layer is what the other two build on), `baml_native_python` (pyo3), `baml_native_node` (Node-API) |
+| Bindings for the type-shapes fixture, in all three languages | Built by hand, in the shape today's generators emit. The generators are not changed |
+| Generators, LLM functions, generics, streaming, cancellation, calls from BAML into the host | Next |
 
 ## The decision
 
@@ -22,25 +21,35 @@ User code does not get references into BAML memory. That idea, and why it waits,
 
 - For the usual case, where the host reads most of a result, a copy is as fast or faster in Python and Node.
 - Users keep the objects they have today, and nobody has to choose between two kinds of result on every call.
-- The cost of the current bridges is converting twice through protobuf, not the copy. This design converts once.
+- The cost of today's bridges is converting twice through protobuf, not the copy. This design converts once.
+
+What travels through the C functions is a **handle**: a token for an object that stays inside the runtime, with functions to read it, as in CPython's C API or SQLite's `sqlite3_column_*`. Handles are used only inside the bindings; user code never sees one. The two other styles do not fit:
+
+| Style | What crosses | For BAML |
+|---|---|---|
+| Message | One generic call carrying a serialized blob (today's bridges, protobuf) | Two conversions per value: BAML to bytes, bytes to host object |
+| Struct | A C struct per type, described in a header | The collector moves objects, a field is two words (tag and payload), a string is not a `char*`, a list is not a C array; each object would be copied into a C struct first |
+| **Handle** | A token, and functions to read and build | One conversion: read the object where it is, build the host object |
 
 ## The layers
 
 ```
- your Python / TypeScript / Rust code
-        │   greet(person: Person) -> str            typed, as today
+ your Python / TypeScript / Rust code         unchanged: today's classes and functions
+        │   greet(person: Person) -> str
  ┌──────▼────────────────────────────────┐
- │ generated bindings (per program)      │  next
+ │ bindings (per program)                │  today's generated code; only the runtime it imports changes
  ├───────────────────────────────────────┤
- │ small support library (per language)  │  built for Rust: baml_native_host
+ │ support library (per language)        │  baml_native_host · baml_native_python · baml_native_node
  ├───────────────────────────────────────┤
- │ C functions exported by the library   │  built (spike)
+ │ baml_native_host core                 │  Library, Session, BamlValue, Interface
+ ├───────────────────────────────────────┤
+ │ C functions exported by the library   │  baml_lib_*
  ├───────────────────────────────────────┤
  │ compiled BAML + the Rust runtime      │  one .dylib
  └───────────────────────────────────────┘
 ```
 
-## What the user writes does not change
+What the user writes does not change:
 
 ```python
 from baml_sdk.class_refs import Inner, Outer, round_trip_outer
@@ -58,28 +67,7 @@ let o = Outer { inner: Inner { value: 9 } };
 let r = round_trip_outer(o).await;
 ```
 
-What changes is underneath: the library that is loaded, and how a value gets from BAML memory into the host object.
-
-## Three ways to cross a C boundary
-
-Every design uses C functions to get in and out of a library. The question is what travels through them.
-
-| Style | What crosses | Who uses it | For BAML |
-|---|---|---|---|
-| **Message** | One generic call carrying a serialized blob | The VM's bridges (protobuf) | Two conversions per value: BAML to bytes, bytes to host object |
-| **Struct** | A C struct per type, described in a header file | Ordinary C libraries. Usually what "just use C FFI" means | BAML objects are not C structs, so each one would be copied into a C struct first, then into the host object |
-| **Handle** | A token for an object that stays inside the runtime, plus functions to read it | CPython's C API, JNI, SQLite's `sqlite3_column_*` | One conversion: read the object where it is, build the host object |
-
-This design is the handle style, used only inside the bindings. User code never sees a handle.
-
-Why not the struct style:
-
-- The collector **moves** objects (`gc.md`). A `Person*` given to the host points at garbage after the next collection.
-- A field is not a C field: every value is two words, a tag and a payload (`memory.md`).
-- A string is not a `char*`, a list is not a C array, and a union is told apart by its tag.
-- A C function returns when it is done. A BAML function may wait for the network, so a call must be able to finish later.
-
-## How a call works (built)
+## How a call works
 
 A call does not return its result. It starts, and finishes later.
 
@@ -112,7 +100,9 @@ How a call can end, as `on_done` says:
 
 A task the call spawned that fails, with nothing awaiting it, is reported through `on_unhandled` once **the last task of its call has ended**, because nothing can await it after that, or in the turn that reports the call stuck. The task is then freed. A sibling that awaits the failed task after the call returned takes the error, and nothing is reported. Each call has a record of its live tasks, found from the task without hashing; nothing scans every task per turn.
 
-## The exported functions (built)
+## The C functions
+
+### What the library exports
 
 In `src/sched/host.rs` and `src/sched/host/`, feature `host-lib`. The library exports these and nothing else. Every function that takes a handle checks it: in range, holding an object, of the right kind. A wrong one gets the function's error value, never undefined behaviour, and `baml_lib_last_error` says why. No function consumes a handle: the host frees every handle it was given. Called before `baml_lib_init`, a function returns its error value.
 
@@ -143,7 +133,7 @@ A freed handle's slot is reused. A handle kept after it was freed may then name 
 
 Reads return objects as new handles: reading a field that holds an instance gives a handle to it, which the reader frees.
 
-## Values across the boundary (built)
+### Values across the boundary
 
 A value is two words, `{tag, payload}`, the same 16 bytes a heap slot holds.
 
@@ -159,7 +149,7 @@ A handle is a slot in a table that grows by chunks of 4096 slots. A chunk never 
  bindings ──▶ handle slot ──▶ Person      (the slot is rewritten when Person moves)
 ```
 
-## Checked writes (built)
+### Checked writes
 
 Compiled code trusts static types: a slot typed `int` that held a string would be read as a number, and a slot typed as a class that held an `int` would be read as an address. So a value from the host is checked where it lands in a typed place, and refused if it does not fit:
 
@@ -170,17 +160,17 @@ Compiled code trusts static types: a slot typed `int` that held a string would b
 
 Every build function checks all its inputs first, then allocates once, then turns handles into addresses: an allocation can move every object, and the handles are where the collector leaves the new addresses.
 
-## The interface as data (built)
+### The interface as data
 
 `interface.rs` in the compiler turns the exported functions into plain data: their numbers, names, parameters (name, type, whether it has a default), result and throws type, and every class and enum the signatures reach, numbered, with fields in slot order and variants in order. One hash covers all of it. The table of exports is emitted from it, and `native_pack --lib --describe` prints it as JSON for bindings.
 
 - `native_pack --lib <dir> <out>` takes a directory as the source root and exports every function that can be exported. Each one that cannot is printed with the reason, for example `a generic class 'generics.Box'` or `a bigint`. A list of names exports just those, in that order.
 - A type the boundary cannot carry is refused when packing, naming the function and the type: bigint, uint8array, tuples, functions, generic classes, classes of the standard library, maps whose keys are not strings, recursive aliases, `json`, and classes the library cannot describe (fields with `@json.flatten` or `@json.fallback`, a class's own `to_json` or `from_json`).
-- The interface's JSON is in the library too, read with `baml_lib_interface_json`.
+- The interface's JSON is in the library too, read with `baml_lib_interface_json`. Beside each type's text it carries the same type as a tree (`"int"`, `{"literal": 42}`, `{"class": 3}`, `{"enum": 1, "variant": 0}`, `{"list": T}`, `{"map": T}`, `{"union": [...]}`), so no host parses type text.
 - A thrown value is only read, never built, so a throws type that cannot cross does not block a function: its errors arrive described, without a type.
 - The table records each function's and each class's number of type parameters, zero for now. Type arguments are to travel first in the values a call or an instance takes.
 
-## Inside the library (built)
+### Inside the library
 
 | Piece | Where | What it is |
 |---|---|---|
@@ -201,17 +191,22 @@ How one call runs:
 
 The call id lives in the task (`wait_value`), and every task the call spawns inherits it. The entry's address waits in the first slot of the argument array. So starting a call allocates nothing but the array and, when none is free, a task.
 
-## Copying a result (built for Rust)
+## Rust (built)
 
-Generated code knows each type, so the copy is straight-line code: read each field once, build the host object. The numbers it uses come from `--describe`; the interface hash makes a library and bindings of different versions refuse each other at load. Arguments go the other way, bottom-up, each part a handle until it is built into its parent.
+**What the user writes.** Today's generated Rust SDK: plain structs, enums and union enums, one async function per export.
 
-The crate `baml_native_host` is in two layers.
+```rust
+let profile = complex_models::round_trip_complex_profile(&profile).await?;
+```
+
+**What is underneath.** The crate `baml_native_host`, in two layers.
 
 **The core** is what any host builds on: a Python or Node module written in Rust drives it from its own event loop. It has no executor types and no thread of its own.
 
 | Piece | What it is |
 |---|---|
 | `Library::load(path, hash, wake)` | Opens the library, refuses one whose interface hash is not the bindings', builds its worker. `wake` is called from any thread when the library wants a turn. One library per process: the same path again returns it, another path is an error |
+| `Library::interface()` | The interface as a typed tree, parsed once at load: `Interface` (functions, types), `Function` (params, result, throws), `TypeDef` (class fields or enum variants), `Type` (scalars, literals, class or enum by number, enum variant, list, map, union). Bindings build their plans from it |
 | `Library::exports()`, `interface_json()`, `find(name)` | The interface as data: the exports, and the JSON `--describe` prints |
 | `Library::session()` | The library's lock, held by this thread: a `Session`. Neither `Send` nor `Sync`, nor is a `BamlValue` |
 | `Session::start(export, args)` | Starts a call from values built in the session; its id |
@@ -234,21 +229,24 @@ How calls are driven: a `Call` that is polled gives the library a turn when one 
 - Nothing of the user's runs while the library is held. Wakers are woken, and the unhandled hook is called, after the session is dropped. The hook gets the error as text, may call any binding, and a panic in it is caught.
 - A `Call` that is dropped does not cancel the BAML call: its result is freed when it arrives.
 
-The bindings for the type-shapes fixture are in `baml_native_host/tests/type_shapes/bindings.rs`: plain structs, enums and union enums with the names `sdkgen_rust` emits, and one async function per export under its own name, with its arguments taken as `sdkgen_rust` takes them (today's SDK also emits a `_sync` twin, which these leave out).
+The bindings for the type-shapes fixture are in `baml_native_host/tests/type_shapes/bindings.rs`: the names `sdkgen_rust` emits, arguments taken as it takes them. Each class is copied by straight-line code: read each field once, build the struct.
+
+**What differs from today's SDK.**
+
+- No `_sync` twin.
+- Errors are `baml_native_host::Error<E>`: `Thrown` (the declared type), `Runtime` (anything else thrown, described), `Panic`, `Stuck`, `Sdk`.
+- No per-call options, cancellation, streams or generics.
 
 ## Python (built)
 
-The crate `baml_native_python` is a pyo3 module, `baml_native._native`, built on the core alone, with a small Python package `baml_native` in front of it. A generated package uses it in place of today's runtime: it gives `load`, `set_type_map` and `define_function` with the signatures `baml_bridge` has.
+**What the user writes.** Today's generated package, unchanged: pydantic classes, enums, `f(...)` and `f_sync(...)`.
 
+```python
+o = await round_trip_outer(Outer(inner=Inner(value=9)))
+p = round_trip_complex_profile_sync(profile)
 ```
- baml_sdk (today's generated package)      classes, enums, signatures unchanged
-        │   define_function(...) from baml_native instead of baml_bridge
- ┌──────▼─────────────────────────────────┐
- │ baml_native._native (pyo3)            │  plans, the loop, calls, errors
- ├───────────────────────────────────────┤
- │ baml_native_host core                 │  Library, Session, BamlValue, Interface
- └───────────────────────────────────────┘
-```
+
+**What is underneath.** The crate `baml_native_python`: a pyo3 module, `baml_native._native`, on the core alone, and a small package `baml_native` that gives generated code `load`, `set_type_map` and `define_function` with the signatures `baml_bridge` has.
 
 | Piece | What it is |
 |---|---|
@@ -271,101 +269,202 @@ How it joins asyncio:
 - One loop at a time. A call that must wait on another loop moves the reader there when the old loop is closed or has nothing in flight. Otherwise it is a `RuntimeError`. A call from another thread is a `RuntimeError`, as is a call made from Python code run while a result is being built. Neither is ever a hang.
 - The GIL is released while BAML runs in a turn, and taken again for each result copied.
 
-What differs from today's SDK:
+The bindings are today's generated package for the type-shapes fixture plus `bridge_test`, with 81 lines changed, all of them imports or the init call. `tests/type_shapes/setup.sh` makes them and lists them. Today's 136 tests for the fixture run against them unchanged: 79 pass and 57 are skipped. 51 of the skips are tests that call a function not in the library's interface, whatever they catch. 6 need standard-library handles (4), media (1), or the wire's 32-level limit (1). The crate's own 50 tests pass too (10 of them run against today's SDK as well, with the same answers). All of it passes again under `BAML_GC_STRESS=1`, and with models made by `model_validate`.
+
+**What differs from today's SDK.**
 
 - `baml.panics.Exit` raises `BamlPanic`. It does not `os._exit`.
 - A stuck call raises `BamlPanic` with `baml.panics.Stuck`. Today's VM has no such error: such a call never ends.
-- Arguments may nest 200 levels; the protobuf wire allowed 32.
-- No `_baml=` options, cancellation of the BAML call, streams, or generics.
-- Argument rules are today's, and checked against today's SDK by the same tests (`test_arguments.py` runs against both). Argument errors come at `await`, as today: a missing argument is `BamlError` with `baml.errors.InvalidArgument`, too many positional arguments a `TypeError`.
+- Arguments nest at most 200 levels; today's wire refuses at 33.
+- No `_baml=` options, cancellation of the BAML call, streams, generics, or instance methods.
+- Argument rules are today's, checked against today's SDK by the same tests (`test_arguments.py` runs against both). Argument errors come at `await`, as today.
+- The standard library's handles (`baml.fs`, `baml.http`) and media classes still come from today's `baml_bridge`, which stays installed for them, for the error classes and for the type map.
 
-The bindings are today's generated package for the type-shapes fixture plus `bridge_test`, with 81 lines changed, all of them imports or the init call. `tests/type_shapes/setup.sh` makes them and lists them. Today's 136 tests for the fixture run against them unchanged: 79 pass and 57 are skipped. 51 of the skips are tests that call a function not in the library's interface, whatever they catch. 6 need standard-library handles (4), media (1), or the wire's 32-level limit (1). The crate's own 50 tests pass too (10 of them run against today's SDK as well, with the same answers). All of it passes again under `BAML_GC_STRESS=1`, and with models made by `model_validate`.
+## Node (built)
 
-On Apple M5 Max, Python 3.13, through `perfq --bench` (#1170, #1172 to #1177). Each number is the median of 3 or 5 interleaved rounds, each round the median of 3 runs. Outside load was 0.33 to 0.48 cores. "Today's" is the generated Python SDK of the same sources over the VM (`baml_bridge`, release). Native models are made by the native construct (below), and the GIL is released.
+**What the user writes.** Today's generated TypeScript package, unchanged, `_sync` twins included.
 
-| One call, one after another | Today's, async | Native, async | Today's, sync | Native, sync |
-|---|---|---|---|---|
-| `round_trip_int` | 43.7 µs, 365,662 instr. | 291 ns, 8,151 | 29.0 µs, 321,451 | 201 ns, 5,700 |
-| `round_trip_inner` | 56.3 µs, 535,869 | 713 ns, 20,157 | 38.5 µs, 487,947 | 621 ns, 17,509 |
-| `round_trip_complex_profile` | 478 µs, 9,547,442 | 19.6 µs, 465,552 | 456 µs, 9,477,652 | 19.1 µs, 461,686 |
+```ts
+const o = new Outer({ inner: new Inner({ value: 9 }) });
+const r = await round_trip_outer(o);       // an Outer, as today
+const s = round_trip_outer_sync(o);
+```
 
-| Arrays, sync, per element | Today's | Native | Pure Python, same objects |
-|---|---|---|---|
-| `int[]` of 100,000 out | 326 ns | 79 ns, 502 instr. | 13 ns |
-| `int[]` of 100,000 in | 534 ns, 9,359 instr. | 13 ns, 128 | 7 ns |
-| `Point[]` of 10,000 out | 3,350 ns | 343 ns, 6,488 | 326 ns |
-| `Point[]` of 10,000 in | 5,316 ns, 136,673 | 97 ns, 1,682 | 37 ns |
+**What is underneath.** The crate `baml_native_node`, a Node-API addon on the core, and `baml_native_node/js`, the runtime generated SDKs import as `@boundaryml/baml-bridge`.
 
-Instructions come from running each case at n and 2n. For the "in" rows they are net of building the argument, which the pure-Python run does too.
+| Piece | What it is |
+|---|---|
+| The addon (`src/lib.rs`) | A Node-API module written against the C functions directly (`napi-sys`, Node-API version 10). It loads the library through `Library::load`, checks the interface hash, and holds the plans. It belongs to the first JavaScript environment that loads the library |
+| Plans (`src/copy.rs`) | Built at the first call, from `Library::interface()`: per export its parameter types and result plan; per class its field names (kept as JavaScript strings), field plans and generated class; per enum its generated members. Built again after `setTypeMap`, deleting the old references |
+| Arguments (`src/args.rs`) | Builds a call's arguments by the parameters' declared types, by today's encoder's rules (below) |
+| The runtime (`js/index.js`) | Exports the names `@boundaryml/baml-bridge` exports. `defineFunction` (async and sync), the type map and the error classes are real. The rest (instance methods, media, streams, tracing, `$baml` options) are stubs that throw when used, so a whole generated SDK imports |
+| The bindings | Today's generated package, unchanged except `_inlinedbaml.ts`, which names the library and its hash instead of embedding bytecode, and two lines of `index.ts` (the initializer's import and call: `initializeNativeLibrary(_inlinedbaml.LIBRARY, _inlinedbaml.INTERFACE_HASH)`). Its `package.json` points `@boundaryml/baml-bridge` at the native runtime |
 
-After the review's fixes (#1237 to #1245) the Mac's outside load was 0.74 to 1.17 cores, too much to quote times. Instruction counts, which do not depend on it, are within about 1% of the table above (profile 467,007 sync, `Point[]` in 13,074 gross). The times agree with it too, and so do their ratios to today's SDK, which each job measures interleaved: sync `round_trip_int` 209 ns, inner 638 ns, profile 19.2 µs, `Point[]` in 98 ns.
+How Node's loop is joined:
 
-How a model is made decides most of what is left. Today's SDK validates, so the table below shows like for like: the native bridge making models three ways, beside pure Python building the same objects each way with no bridge (#1172, #1175, #1177, sync).
+```
+JavaScript (main thread)                      the library
+------------------------                      -----------
+f(args)  ── start(export, args) ─▶ build args by declared type, call_start
+queueMicrotask ── turn() ───────▶ run BAML
+         ◀── [delay, pending, id, status, value, ...] ── results copied in the turn
+setTimeout(delay) ── turn() ─────▶ a BAML timer is due
+onWake() ── turn() ─────────────▶ ◀── wake() from the I/O thread, through a thread-safe function
+f_sync(args) ── start + drive(id) ▶ turns until call id ends, sleeping on the timer or a wake in between
+```
 
-| | Today's (validates) | Native: validate | Native: `model_construct` | Native: native construct | Python: validate | Python: `model_construct` | Python: native construct |
-|---|---|---|---|---|---|---|---|
-| `round_trip_inner` | 38.5 µs | 822 ns | 1,067 ns | 621 ns | 317 ns | 537 ns | 223 ns |
-| `round_trip_complex_profile` | 456 µs | 26.9 µs | 34.0 µs | 19.1 µs | 27.2 µs | 35.0 µs | 20.7 µs |
-| `Point[]` out, per element | 3,350 ns | 550 ns | 800 ns | 343 ns | 428 ns | 695 ns | 326 ns |
+- BAML runs on Node's main thread, inside `call`, `turn` or `drive`. A call schedules one turn by `queueMicrotask`, so calls started together share a turn. With `BAML_NATIVE_TURN=eager` it runs a turn at once instead (`call`); the two cost the same per call (below).
+- The thread-safe function is referenced only while calls are pending, and the timer for the next BAML timer is unreferenced when none is: a script whose last call has ended exits, even with a BAML task still sleeping.
+- `drive` hands back every event of its turns, so calls that end while a `_sync` call waits are settled too.
+- An entry point entered while another holds the library (a constructor run while a result is copied, or a getter run while arguments are read, that calls a binding) throws instead of waiting for the core's lock. The async and the `_sync` form throw the same `BamlClientError`.
+- The addon belongs to the first environment that loads the library. A `worker_threads` worker, or a second copy of the addon, gets a `BamlClientError` from every entry point and touches no shared state; a second copy of the JavaScript runtime in the same thread is refused at load, so it cannot take the first one's events.
+- When that environment is torn down, a cleanup hook added after the thread-safe function (so it runs before Node frees it) releases it, under the lock a wake takes: a wake after that does nothing. A process exits cleanly with a spawned task's I/O or timer in flight.
 
-- With validation kept, the profile goes from 456 µs to 26.9 µs. That is the bridge alone, 17×, and it lands on what pydantic validation costs with no bridge at all (27.2 µs). Skipping validation takes it to 19.1 µs.
-- `model_construct` is slower than validating: it is Python code. The native construct does what it does, from Rust: `object.__new__(cls)`, then `__dict__`, `__pydantic_fields_set__`, `__pydantic_extra__` and `__pydantic_private__` set with the generic setter. It depends on those four pydantic v2 slots, and on the generated models having no private attributes and no validators that change values. It is the default.
-- The GIL (#1185, #1183, #1184, #1181): releasing it costs 27 to 30 ns, about 1,200 instructions, on a call that ends at once, and nothing measurable on `make_ints(1,000,000)` or on the profile. While a thread made long calls, another Python thread ran about 14 times as many iterations with the GIL released (37 M held, 505 to 538 M released). It is released by default.
+Copying: a turn copies each result in the same native call, by its export's plan, through the core's reads (`field`, `elements`, `entries`, `variant_index`, `string`). A class instance is built by one call into a small per-class JavaScript function made at bind, `(v0, v1, ..) => { const o = new C(E); o.f0 = v0; ..; return o }`; that was the fastest of three ways measured. An `int` becomes a number, a map a null-prototype object, an enum value its generated member, a union by its value's tag.
+
+Arguments are built by the parameter's declared type, by the rules of today's encoder (`bridge_encode`'s planner with its JavaScript rules), and `js/parity` checks the same cases against both bridges:
+
+- a class takes an instance of its own generated class (found by a symbol `bind` sets on each generated prototype) or a plain object; only own properties are read, an unknown key is refused (`class user.bridge_test.Point has no field \`z\``), and a missing nullable field is `null`;
+- a map takes a plain object, not a `Map`; an `int` takes a whole number or a `bigint` in range;
+- a union ranks its members by how the value stands to each: its own type, then its structural type (an array as a list, a plain object as a map), then a conversion (a whole number as a `float`, a string as an enum value, a plain object as a class). Every member of the best rank that takes the value is built. A tie goes to the value's natural type, then to the member that read the fewest fields as `null`, else the value is refused as ambiguous. So a string stays a string under `Mood | string`, `1` is the literal under `float | 1 | 2`, and `{text}` is a `Tag` under `Note { text, meta? } | Tag { text }`;
+- arguments and results nest at most 200 levels of classes, lists and maps. Deeper, or cyclic, is refused: ``the value is nested too deeply for the boundary, which carries 200 levels``. Today's bridge refuses earlier, at its wire's limit: a chain of 33 classes.
+
+**What differs from today's SDK.**
+
+How a call ends, in JavaScript:
+
+| End | Error | As today's SDK |
+|---|---|---|
+| returned | the promise resolves, the `_sync` function returns | yes |
+| threw | `BamlError` (`.value` the thrown value, a declared class as its generated class; `.className`; message `baml error: <class>[: <message>]`) | yes, without `.bamlTrace` (traces are dropped) |
+| panicked | `BamlPanic`, message `baml panic: <class>[: <message>]` | the same message and `.className`; `.value` is the value's text (`baml.panics.DivisionByZero {dividend: 1}`), not an object, because the standard library's classes are not in the interface |
+| stuck | `BamlPanic`, `baml panic: the call can never finish: ...` | today's SDK never settles such a call |
+| refused, by the bindings or the library | a plain `Error` with the code `InvalidArg`: `user.optional.round_trip_resume: argument \`r\`: class user.optional.Resume requires field \`name\``; the value is rendered by today's `describe` | yes, the same message |
+| a result nests deeper than 200 levels | `BamlError`, `the result is nested too deeply for the boundary, which carries 200 levels` | today's bridge refuses deep results at its wire's limit |
+| called from a worker, or from a second copy of the runtime | `BamlClientError`, `the native BAML library belongs to another JavaScript environment ...` | today's bridge runs in workers; this one does not |
+| a constructor threw while copying, or a getter while arguments were read | that exception, as it is, from both forms | yes |
+| a task failed and nothing awaits it | thrown on Node's loop | yes |
+
+Also: arguments and results nest at most 200 levels (today's wire refuses at 33); `worker_threads` are not supported (the addon belongs to the first environment that loads it); instance methods, media, streams, tracing and `$baml` options are stubs that throw; an `int` beyond 2^53 loses precision, as today.
 
 ## Measured
 
-On the Rust host, Apple M5 Max, through `perfq --bench` (#1092): the median of eight interleaved rounds, outside load 0.33 cores. Instructions per call come from running each case at two sizes. "Today's SDK" is the generated Rust SDK of the same fixture over the VM (`bridge_cffi`, release), called the same way.
+One session on one Mac (Apple M5 Max, 18 cores), through `perfq --bench`, every binary run once untimed first. "Today's" is the generated SDK of the same sources (the type-shapes fixture plus `bridge_test`) over today's VM, release builds, called by the same script. Time is the median of interleaved rounds; instructions per call come from two sizes and their difference. For the arrays, time and instructions are per element; for arguments ("in") the instructions include building the argument, the same on both sides, and Python's are net of it.
 
-| One call, one after another | Native: instructions | Native: time | Today's SDK: instructions | Today's SDK: time |
-|---|---|---|---|---|
-| `add(int, int)` through the C functions alone | 1,037 | 39 ns | | |
-| `add(int, int)` through the bindings | 2,772 | 95 ns | | |
-| `round_trip_int(int)` | 2,619 | 89 ns | 212,053 | 21.4 µs |
-| `round_trip_inner(Inner)`, a class of one `int` | 4,646 | 160 ns | 265,468 | 26.0 µs |
-| `round_trip_complex_profile`, the SDK tests' nested profile | 238,303 | 9.3 µs | 4,214,833 | 213 µs |
+**Rust** (#1264, outside load 0.46 cores; 5 rounds; `crates/baml_native_host/scripts/bench.sh`, `bench_run.py`; today's: `sdkgen_rust` over `bridge_cffi`, current-thread tokio):
 
-| Arrays, per element | C calls per element | Instructions | Time |
+| One call after another | Today's | Native | Native vs today |
 |---|---|---|---|
-| `int[]` out of BAML, 100,000 to 600,000 | 1 (`array_get`) | 240 | 99 ns, mostly BAML building the array and first touches of new memory |
-| `int[]` into BAML | 0 (one `array_new`) | 203 | 8.8 ns |
-| `int[]` round trip | 1 | 331 | 14 ns; today's SDK 4,281 and 342 ns |
-| `Point[]` out, 10,000 to 60,000 | 5 (`array_get`, `class_of`, two `field_get`, a free) | 1,066 | 88 ns |
-| `Point[]` in | 2 (`instance_new`, a free) | 1,942 | 63 ns |
+| `round_trip_int` | 21.3 µs · 213,294 instr. | 90.7 ns · 2,579 | 234× |
+| `round_trip_inner` (one-`int` class) | 26.2 µs · 263,545 | 161 ns · 4,629 | 163× |
+| `round_trip_complex_profile` | 214 µs · 4,210,191 | 10.1 µs · 235,332 | 21× |
+| `int[]` of 100,000 out, per element | 218 ns · 2,991 | 71.3 ns · 213 | 3.1× |
+| `int[]` of 100,000 in | 198 ns · 2,226 | 9.1 ns · 209 | 22× |
+| `Point[]` of 10,000 out | 1,576 ns · 27,287 | 115 ns · 1,085 | 14× |
+| `Point[]` of 10,000 in | 2,063 ns · 43,672 | 67.8 ns · 1,809 | 30× |
 
-- The C surface costs 1,037 instructions per `add`: 1,680 in the spike, 953 once the per-call map went, 84 more for the per-call record of live tasks that makes the unhandled rule exact.
-- The bindings add about 1,700 more: the lock, the map of waiting calls, the executor. Splitting the crate first cost 4,752; keeping the events in a cell under the lock, skipping the deferred frees when there are none, passing few arguments from the stack, hashing call ids by a multiplication and waking one call without a vector took it to 2,772, under the 3,910 before the split.
-- Reading costs one C call per field and per element, with a handle for each object read. Bulk reads are not built; the per-element numbers above are what they would save.
-- With 12,000 calls started before the first turn, each costs about 20,000 instructions: each waiting task maps a fresh stack.
+**Python** (#1265 to #1271, outside load 0.33 to 0.50 cores; 3 or 5 rounds, each the median of 3 runs; `crates/baml_native_python/tests/type_shapes/bench_run.py`; today's: `baml_bridge`; native: models by the native construct, GIL released):
+
+| One call after another | Today's, async | Native, async | Today's, sync | Native, sync | Native vs today, sync |
+|---|---|---|---|---|---|
+| `round_trip_int` | 43.9 µs · 368,312 | 309 ns · 8,256 | 29.2 µs · 321,119 | 204 ns · 5,686 | 143× |
+| `round_trip_inner` | 55.9 µs · 535,448 | 739 ns · 20,393 | 38.6 µs · 488,610 | 643 ns · 17,618 | 60× |
+| `round_trip_complex_profile` | 478 µs · 9,523,193 | 19.9 µs · 467,248 | 458 µs · 9,460,427 | 19.4 µs · 466,022 | 24× |
+
+| Arrays, sync, per element | Today's | Native | Pure Python, same objects | Native vs today |
+|---|---|---|---|---|
+| `int[]` of 100,000 out | 326 ns | 78 ns · 512 instr. | 13 ns | 4.2× |
+| `int[]` of 100,000 in | 514 ns · 9,010 net | 12 ns · 122 net | 7 ns | 43× |
+| `Point[]` of 10,000 out | 3,406 ns | 347 ns · 6,698 | 333 ns | 9.8× |
+| `Point[]` of 10,000 in | 5,294 ns · 138,998 net | 99 ns · 1,795 net | 37 ns | 53× |
+
+Today's SDK validates every model. Like for like, sync (the same jobs), with the native bridge making models three ways and pure Python building the same objects each way:
+
+| | Today's | Native: `model_validate` | Native: `model_construct` | Native: native construct | Python: validate | Python: `model_construct` | Python: native construct |
+|---|---|---|---|---|---|---|---|
+| `round_trip_inner` | 38.6 µs | 851 ns | 1,060 ns | 643 ns | 324 ns | 549 ns | 224 ns |
+| `round_trip_complex_profile` | 458 µs | 27.3 µs | 33.9 µs | 19.4 µs | 27.5 µs | 35.4 µs | 21.1 µs |
+| `Point[]` out, per element | 3,406 ns | 563 ns | 827 ns | 347 ns | 438 ns | 707 ns | 333 ns |
+
+- With validation kept, the bridge alone takes the profile from 458 µs to 27.3 µs (17×), the cost of pydantic validation with no bridge at all (27.5 µs). Skipping validation takes it to 19.4 µs.
+- The native construct sets `__dict__`, `__pydantic_fields_set__`, `__pydantic_extra__` and `__pydantic_private__` with the generic setter after `object.__new__`; it depends on those four pydantic v2 slots. Models it would build wrong (extra fields allowed, private attributes, validators, `model_post_init`) are made with `model_validate`.
+- Releasing the GIL during a turn costs 27 to 30 ns on `round_trip_int` and nothing measurable on long calls, while another Python thread gets about 14 times more done during them (#1181 to #1185, before the merge).
+
+**Node** (#1272 time, outside load 0.32 cores, 3 rounds, each the median of nine batches; #1273 instructions, 0.25; `crates/baml_native_node/scripts/bench.sh`; today's: `bridge_typescript`; native: microtask turn, the default):
+
+| Async, one `await f()` after another | Today's | Native | Plain JavaScript, no bridge | Native vs today |
+|---|---|---|---|---|
+| `round_trip_int` | 28.1 µs · 371,748 | 488 ns · 18,078 | 0 ns | 58× |
+| `round_trip_inner` | 35.9 µs · 494,649 | 774 ns · 27,264 | 10 ns | 46× |
+| `round_trip_complex_profile` | 325 µs · 8,711,567 | 31.9 µs · 1,012,843 | 407 ns | 10× |
+| `int[]` of 100,000 out, per element | 344 ns | 131 ns | 0.9 ns | 2.6× |
+| `int[]` of 100,000 in | 413 ns | 30 ns | 0.4 ns | 14× |
+| `Point[]` of 10,000 out | 1,210 ns | 196 ns | 12.5 ns | 6.2× |
+| `Point[]` of 10,000 in | 3,689 ns | 254 ns | 0.9 ns | 15× |
+
+- Sync against sync: `round_trip_int` 11.1 µs today, 399 ns native (28×); `round_trip_inner` 17.5 µs and 673 ns (26×); the profile 313 µs and 32.5 µs (9.6×).
+- The eager turn costs the same as the microtask turn (512 against 488 ns for `round_trip_int`).
+- Instances are built by one call into a per-class function taking the values in order: 788 ns for `round_trip_inner`, against 830 ns setting each property from native code and 798 ns for `new C({..})`.
+
+Where the time goes:
+
+- A call through the C functions alone costs about 1,000 instructions; Rust's bindings add the lock, the map of waiting calls and the executor (2,579 for `round_trip_int`). Python adds the coroutine object and the GIL release (5,686 sync); Node the promise, the generated wrapper and about ten Node-API calls (18,078).
+- Reading costs one C call per field and per element, and a string read allocates; that is most of `int[]` out in every language.
+- Arguments in Python and Node are read the way today's encoders read them (an instance or a plain object, unknown keys refused, unions by rank), which costs more than reading declared fields only.
 
 ## Limits today
 
 | Limit | Consequence |
 |---|---|
-| One worker per process | Two BAML libraries cannot be loaded together. Calls into the library must come one at a time; the Rust crate's lock enforces it, the C functions do not |
-| A turn runs on the thread that polls, holding the lock | A long BAML computation blocks that executor thread, and every other call waits for the lock |
+| One library per process, one thread or loop at a time | Two BAML libraries cannot be loaded together. Rust: the core's lock serializes calls. Python: the loading thread owns the library, other threads get `RuntimeError`, one asyncio loop at a time. Node: the first JavaScript environment owns it; workers get `BamlClientError` |
+| A turn runs on the host's thread | A long BAML computation blocks that thread (Python releases the GIL during it) |
 | Generic classes and functions with type parameters are refused when packing | Type arguments would have to cross; the table leaves room for them |
-| bigint, uint8array, tuples, functions, `json`, maps whose keys are not strings, classes of the standard library do not cross | Refused when packing, with the reason |
-| An array does not record its element type | A result typed `int[] \| string[]` cannot be told apart when it is empty |
+| bigint, uint8array, tuples, functions, `json`, media, maps whose keys are not strings, classes of the standard library do not cross | Refused when packing, with the reason. About 60% of the type-shapes fixture packs |
+| Values of classes outside the interface cannot be read | A standard-library panic arrives as text (`.value`), a thrown tuple cannot be read |
+| An array does not record its element type | A result typed `int[] \| string[]` cannot be told apart when it is empty. A type test between array types does not compile natively yet |
 | An array or a map from the host can be passed once | Bindings build a fresh one for each place, which is what copying does anyway |
-| The trace of a throw is dropped | Errors arrive as a value and its text |
-| A stuck call's tasks stay parked for the life of the process | A task parked on I/O may still be named by the job it waits for, so it is not freed |
-| Two calls cannot share state through the program | A global is a `const`, and reading one is not compiled natively yet. When it is, a semaphore shared by two calls could release a call reported stuck, and its result would be dropped |
-| A `spawn` with semaphores or cancel tokens ends the host's process | It reaches `baml_rt_spawn_unsupported`, which exits; making it fail the call needs a throw from that stub, not built |
+| The trace of a throw is dropped | Errors arrive as a value and its text, without a BAML traceback |
+| `baml.panics.Exit` | Raises a panic in the host; today's SDKs end the process |
+| A stuck call | Raises a panic; today's SDKs never settle it. Its tasks stay parked for the life of the process |
+| Nesting | Arguments and results nest at most 200 levels; today's wire refuses at 33 |
+| Not built in the bindings | Per-call options, cancellation of the BAML call (a dropped or cancelled caller only frees the result), streams, instance methods (Python's `define_function` does not bind `self`), media, tracing, Node workers |
+| Python, sync calls only | A task spawned by a call that returned advances during later calls; one waiting only on I/O advances when a loop is joined or at the next call |
+| Two calls cannot share state through the program | A global is a `const`, and reading one is not compiled natively yet |
+| A `spawn` with semaphores or cancel tokens ends the host's process | It reaches `baml_rt_spawn_unsupported`, which exits |
 | A stack overflow in a frame too large to throw from ends the host's process | As in an executable (`unwind.rs`) |
 | A handle kept after it is freed may name another object | Safe, but not detected: no generations |
-| Describing a value stops 32 objects deep | A value that holds itself is written with a marker, `<nested too deep>`; executables print uncaught throws the same way |
-| Timers end about 3 ms late | Executables do too; not a bridge problem |
+| Describing a value stops 32 objects deep | A value that holds itself is written with a marker, `<nested too deep>` |
+| Timers end about 3 ms late | Executables do too |
 | arm64 macOS only | As for all native code today |
+
+## Next
+
+- What both languages asked of the core: a string read without extra copies; bulk reads of scalar arrays; builders that take slices; a turn that hands its events back after it returns (so Python can release the GIL for the C turn alone); values of classes outside the interface (a structured description of a thrown value's class).
+- Generics: type arguments travel first in the values a call or an instance takes.
+- LLM functions: the standard library's LLM code does not compile natively yet.
+- The generators: emit what the hand-written bindings show (Rust, Python, TypeScript).
+- Per-call options, cancellation, streaming.
+- Calls from BAML into the host.
 
 ## Try it
 
 ```sh
 cd baml_language
+# Rust: the futures layer over a small library
 cargo build --release -p baml_compiler2_native --example native_pack --example native_host
 target/release/examples/native_pack --lib \
   crates/baml_compiler2_native/examples/native_host/bridge.baml libbridge.dylib \
   add nap env_or greet fail
 target/release/examples/native_host libbridge.dylib
+# Python: pack the fixture, generate both packages, build both runtimes, test
+crates/baml_native_python/tests/type_shapes/setup.sh
+(cd target/native_python/tests && PYTHONPATH=../native ../venv/bin/python -m pytest)
 ```
 
-The host starts `add`, a sleep and two environment reads together, and awaits them as Rust futures. It then passes a string in, gets a string handle back, forces two collections and reads the string again.
+Try it, from `baml_language`, after building `native_pack`, the addon and today's bridge in release:
+
+```sh
+crates/baml_native_node/scripts/stage.sh    # pack the fixture, generate both packages
+crates/baml_native_node/scripts/test.sh     # today's tests, parity, the bridge's own: default, eager turn, the two other builds, BAML_GC_STRESS=1
+crates/baml_native_node/scripts/bench.sh prepare && crates/baml_native_node/scripts/bench.sh time
+```

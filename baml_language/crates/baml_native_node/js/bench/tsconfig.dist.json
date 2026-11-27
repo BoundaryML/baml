@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noCheck": true,
+    "preserveSymlinks": true,
+    "rootDir": "node",
+    "outDir": "dist",
+    "types": ["node"]
+  },
+  "include": ["node/baml_sdk/**/*.ts", "node/children/*.ts", "node/bench.ts", "node/bench_values.ts"]
+}
