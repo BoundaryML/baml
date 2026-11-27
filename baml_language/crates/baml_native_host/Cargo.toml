@@ -13,6 +13,7 @@ doctest = false
 
 [dependencies]
 indexmap = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 baml_compiler2_native = { workspace = true }

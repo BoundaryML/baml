@@ -10,7 +10,7 @@
 //!   ([`Session`]), starting a call from built values ([`Session::start`]),
 //!   running a turn and taking what ended ([`Session::turn`]), reading and
 //!   building values ([`BamlValue`], [`ToBaml`], [`FromBaml`]), and the
-//!   interface as data ([`Library::interface_json`]). No executor and no
+//!   interface as a typed tree ([`Library::interface`]). No executor and no
 //!   thread of its own: a Python or Node module drives it from its own
 //!   event loop.
 //! - **The futures layer**, [`futures`]: [`futures::Call`], a Rust future
@@ -29,6 +29,7 @@
 )]
 
 pub mod futures;
+mod interface;
 mod values;
 
 use std::{
@@ -45,6 +46,7 @@ use std::{
 pub use futures::Error;
 /// The map type generated bindings use, as today's Rust SDK does.
 pub use indexmap::IndexMap as Map;
+pub use interface::{Field, Function, Interface, Param, Type, TypeDef, TypeDefKind};
 pub use values::{BamlValue, Detached, FromBaml, ToBaml};
 
 /// A value as it crosses the C boundary: a tag and a payload.
@@ -210,6 +212,7 @@ pub struct Library {
     wake: WakeFn,
     exports: Vec<Export>,
     interface_json: String,
+    interface: Interface,
 }
 
 // SAFETY: `events`, the one field that is not `Sync` by itself, is only
@@ -285,6 +288,7 @@ impl Library {
         let interface_json =
             unsafe { text_from(|out, capacity| (fns.interface_json)(out, capacity)) }
                 .unwrap_or_default();
+        let interface = Interface::from_json(&interface_json)?;
         let library = LIBRARY.get_or_init(|| Self {
             fns,
             path: path.to_owned(),
@@ -295,6 +299,7 @@ impl Library {
             wake: Box::new(wake),
             exports,
             interface_json,
+            interface,
         });
         let callbacks = Callbacks {
             size: u32::try_from(size_of::<Callbacks>()).expect("a small struct"),
@@ -337,6 +342,12 @@ impl Library {
     /// fields and variants, numbered.
     pub fn interface_json(&self) -> &str {
         &self.interface_json
+    }
+
+    /// Its interface as a typed tree, parsed once at load: what bindings
+    /// build their plans from.
+    pub fn interface(&self) -> &Interface {
+        &self.interface
     }
 
     fn lock(&self) -> MutexGuard<'_, ()> {
