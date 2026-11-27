@@ -125,7 +125,8 @@ approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "
 # The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
 # the same shape), not a prefix + word.
 # `native_rt` is the runtime archive natively compiled programs link against.
-approved_suffixes = ["artifact", "compiler2_hir_ty", "native_rt", "project_root", "test_support"]
+# `native_host` is what Rust code calls a natively compiled library through.
+approved_suffixes = ["artifact", "compiler2_hir_ty", "native_host", "native_rt", "project_root", "test_support"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]
 # The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring
@@ -139,7 +140,9 @@ allowed_prefixes = ["compiler", "compiler2"]
 # `baml_ide` is the IDE/analysis layer over the compiler (rust-analyzer's
 # `ide` shape); it wraps compiler queries so downstream consumers don't
 # have to be on this list.
-allowed_crates = ["baml_db", "baml_ide", "bridge_cffi", "baml_type", "baml_builtins2_codegen"]
+# `baml_native_host` compiles its test library with `baml_compiler2_native`,
+# a dev-dependency only.
+allowed_crates = ["baml_db", "baml_ide", "bridge_cffi", "baml_type", "baml_builtins2_codegen", "baml_native_host"]
 reason = "Use baml_db or baml_ide to access compiler interfaces."
 
 [[namespaces.dependency_rules]]

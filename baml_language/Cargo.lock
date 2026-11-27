@@ -874,6 +874,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_native_host"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_compiler2_native",
+ "baml_db",
+ "indexmap",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "baml_native_rt"
 version = "0.0.0-beta"
 dependencies = [

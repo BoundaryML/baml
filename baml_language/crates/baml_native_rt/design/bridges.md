@@ -10,7 +10,7 @@ Status, on branch `antoniosarosi/native-bridges-poc`, step 1:
 | A Rust host that loads the library and awaits calls | Built, as an example |
 | Reading any exported value out and building any argument in, checked | Built |
 | The library's interface as data: numbers, fields, variants, hash (`native_pack --lib --describe`) | Built |
-| Copying results into host objects | Next: the Rust support crate and bindings |
+| Copying results into host objects | Built for Rust: the crate `baml_native_host`, and bindings for the type-shapes fixture written by hand as a generator would emit them |
 | Generated bindings for Rust, Python and Node | Next. Not built |
 | Calls from BAML into the host, streaming, cancellation | Not designed |
 
@@ -32,7 +32,7 @@ User code does not get references into BAML memory. That idea, and why it waits,
  ┌──────▼────────────────────────────────┐
  │ generated bindings (per program)      │  next
  ├───────────────────────────────────────┤
- │ small support library (per language)  │  next: event loop glue, copying values
+ │ small support library (per language)  │  built for Rust: baml_native_host
  ├───────────────────────────────────────┤
  │ C functions exported by the library   │  built (spike)
  ├───────────────────────────────────────┤
@@ -197,9 +197,23 @@ How one call runs:
 
 The call id lives in the task (`wait_value`), and every task the call spawns inherits it. The entry's address waits in the first slot of the argument array. So starting a call allocates nothing but the array and, when none is free, a task.
 
-## Copying a result (next)
+## Copying a result (built for Rust)
 
 Generated code knows each type, so the copy is straight-line code: read each field once, build the host object. The numbers it uses come from `--describe`; the interface hash makes a library and bindings of different versions refuse each other at load. Arguments go the other way, bottom-up, each part a handle until it is built into its parent.
+
+The crate `baml_native_host` is what Rust bindings sit on:
+
+| Piece | What it is |
+|---|---|
+| `Library::load(path, hash)` | Opens the library, refuses one whose interface hash is not the bindings', builds its worker. One per process |
+| `Library::call(export, args)` | Builds the arguments and starts the call. Returns a `Call<T, E>`, the future of `Result<T, Error<E>>` |
+| `ToBaml`, `FromBaml` | Copy a Rust value into BAML memory and out of it. Implemented for `i64`, `f64`, `bool`, `String`, `()`, `Option<T>`, `Vec<T>`, `IndexMap<String, V>`; generated structs and enums implement them with the interface's numbers |
+| `Session`, `BamlValue` | The library's lock held by one thread, and a value inside it. A `BamlValue` frees its handle when dropped and cannot outlive the session, so no handle reaches user code |
+| `Error<E>` | `Thrown` (the declared type), `Runtime` (anything else thrown, described), `Panic`, `Stuck`, `Sdk` |
+
+How calls are driven: any `Call` that is polled gives the library a turn when it asked for one (a call started, `wake` came, a timer fired), on the polling thread, under the library's lock. So any executor drives the calls, a multi-thread tokio runtime included, and BAML runs on whichever thread polls, one at a time. The runtime has no state tied to a thread: no thread-locals, no signal stack, and the worker's register and stack are set on every resume. A `wake` from the I/O thread and the library's timer wake every pending call; the first to poll turns. A `Call` that is dropped does not cancel the BAML call: its result is freed when it arrives, and the other calls are woken in its place.
+
+The bindings for the type-shapes fixture are in `baml_native_host/tests/type_shapes/bindings.rs`: plain structs, enums and union enums with the names `sdkgen_rust` emits, and one `*_async` function per export with its arguments taken as `sdkgen_rust` takes them.
 
 ## Measured
 
@@ -216,7 +230,8 @@ The first number was estimated at 330 before it was measured. The likely extras 
 
 | Limit | Consequence |
 |---|---|
-| One worker per process | Two BAML libraries cannot be loaded together. Calls into the library must come one at a time; nothing enforces it |
+| One worker per process | Two BAML libraries cannot be loaded together. Calls into the library must come one at a time; the Rust crate's lock enforces it, the C functions do not |
+| A turn runs on the thread that polls, holding the lock | A long BAML computation blocks that executor thread, and every other call waits for the lock |
 | Generic classes and functions with type parameters are refused when packing | Type arguments would have to cross; the table leaves room for them |
 | bigint, uint8array, tuples, functions, `json`, maps whose keys are not strings, classes of the standard library do not cross | Refused when packing, with the reason |
 | An array does not record its element type | A result typed `int[] \| string[]` cannot be told apart when it is empty |
