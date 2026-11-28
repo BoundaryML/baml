@@ -1,2 +1,2 @@
-(identifier) @id
-(property_identifier) @id
+((identifier) @id (#match? @id "^\\s"))
+((property_identifier) @id (#match? @id "^\\s"))
