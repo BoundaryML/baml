@@ -14,6 +14,8 @@ use baml_db::{ProjectDatabase, stdlib_prefix::stdlib_interfaces};
 mod precompiled_stdlib_config;
 
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=src/precompiled_stdlib_config.rs");
     let mut db = ProjectDatabase::new();
     db.ensure_stdlib_sources();
     let interfaces = stdlib_interfaces(&db);
