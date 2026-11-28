@@ -1,0 +1,82 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase7.rs
+expression: "render_labeled_cases(&[(\"enum_catch_all_gets_remaining_variant\",\nr#\"enum E0 { V0, V1, V2 }\nfunction f(x: E0) -> E0.V0 {\n    match (x) {\n        E0.V1 => E0.V0,\n        E0.V2 => E0.V0,\n        let rest => rest,\n    }\n}\n\"#,),\n(\"bool_catch_all_gets_remaining_variant\",\nr#\"function g(x: bool) -> false {\n    match (x) {\n        true => false,\n        _ => x,\n    }\n}\"#,),\n(\"bool_in_union_drops_matched_literal\",\nr#\"function f(x: bool | int) -> false | int {\n    match (x) {\n        true => false,\n        let rest => rest,\n    }\n}\"#,),\n(\"enum_catch_all_keeps_unmatched_variants\",\nr#\"enum E0 { V0, V1, V2 }\nfunction f(x: E0) -> E0.V0 {\n    match (x) {\n        E0.V1 => E0.V0,\n        _ => x,\n    }\n}\"#,),\n(\"unrelated_arm_leaves_enum_unsplit\",\nr#\"enum E0 { V0, V1, V2 }\nfunction f(x: E0 | string) -> E0.V0 {\n    match (x) {\n        string => E0.V0,\n        _ => x,\n    }\n}\"#,),\n(\"fully_covered_enum_catch_all_is_unreachable\",\nr#\"enum E0 { V0, V1, V2 }\nfunction f(x: E0) -> E0.V2 {\n    match (x) {\n        E0.V0 => E0.V2,\n        E0.V1 => E0.V2,\n        E0.V2 => E0.V2,\n        _ => x,\n    }\n}\"#,),])"
+---
+=== enum_catch_all_gets_remaining_variant ===
+enum user.E0
+function user.f(x: user.E0) -> user.E0.V0 throws never {
+  { : user.E0.V0
+    match (x : user.E0) : user.E0.V0
+      E0.V1 =>
+        E0.V0 : user.E0.V0
+      E0.V2 =>
+        E0.V0 : user.E0.V0
+      rest =>
+        rest : user.E0.V0
+  }
+}
+
+=== bool_catch_all_gets_remaining_variant ===
+function user.g(x: bool) -> false throws never {
+  { : false
+    match (x : bool) : false
+      true =>
+        false : false
+      _ =>
+        x : false
+  }
+}
+
+=== bool_in_union_drops_matched_literal ===
+function user.f(x: bool | int) -> false | int throws never {
+  { : int | false
+    match (x : int | bool) : int | false
+      true =>
+        false : false
+      rest =>
+        rest : int | false
+  }
+}
+
+=== enum_catch_all_keeps_unmatched_variants ===
+enum user.E0
+function user.f(x: user.E0) -> user.E0.V0 throws never {
+  { : user.E0.V0
+    match (x : user.E0) : user.E0.V0
+      E0.V1 =>
+        E0.V0 : user.E0.V0
+      _ =>
+        x : user.E0.V0 | user.E0.V2
+  }
+  !! 105..106: type mismatch: expected E0.V0, got E0.V0 | E0.V2
+}
+
+=== unrelated_arm_leaves_enum_unsplit ===
+enum user.E0
+function user.f(x: user.E0 | string) -> user.E0.V0 throws never {
+  { : user.E0.V0
+    match (x : string | user.E0) : user.E0.V0
+      string =>
+        E0.V0 : user.E0.V0
+      _ =>
+        x : user.E0
+  }
+  !! 115..116: type mismatch: expected E0.V0, got E0
+}
+
+=== fully_covered_enum_catch_all_is_unreachable ===
+enum user.E0
+function user.f(x: user.E0) -> user.E0.V2 throws never {
+  { : user.E0.V2
+    match (x : user.E0) : user.E0.V2
+      E0.V0 =>
+        E0.V2 : user.E0.V2
+      E0.V1 =>
+        E0.V2 : user.E0.V2
+      E0.V2 =>
+        E0.V2 : user.E0.V2
+      _ =>
+        x : never
+  }
+  !! 153..154: unreachable arm
+}

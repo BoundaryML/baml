@@ -145,6 +145,74 @@ fn narrowed_value_consumer_matrix() {
     ]));
 }
 
+#[test]
+fn match_bool_enum_values_matrix() {
+    insta::assert_snapshot!(render_labeled_cases(&[
+        (
+            "enum_catch_all_gets_remaining_variant",
+            r#"enum E0 { V0, V1, V2 }
+function f(x: E0) -> E0.V0 {
+    match (x) {
+        E0.V1 => E0.V0,
+        E0.V2 => E0.V0,
+        let rest => rest,
+    }
+}
+"#,
+        ),
+        (
+            "bool_catch_all_gets_remaining_variant",
+            r#"function g(x: bool) -> false {
+    match (x) {
+        true => false,
+        _ => x,
+    }
+}"#,
+        ),
+        (
+            "bool_in_union_drops_matched_literal",
+            r#"function f(x: bool | int) -> false | int {
+    match (x) {
+        true => false,
+        let rest => rest,
+    }
+}"#,
+        ),
+        (
+            "enum_catch_all_keeps_unmatched_variants",
+            r#"enum E0 { V0, V1, V2 }
+function f(x: E0) -> E0.V0 {
+    match (x) {
+        E0.V1 => E0.V0,
+        _ => x,
+    }
+}"#,
+        ),
+        (
+            "unrelated_arm_leaves_enum_unsplit",
+            r#"enum E0 { V0, V1, V2 }
+function f(x: E0 | string) -> E0.V0 {
+    match (x) {
+        string => E0.V0,
+        _ => x,
+    }
+}"#,
+        ),
+        (
+            "fully_covered_enum_catch_all_is_unreachable",
+            r#"enum E0 { V0, V1, V2 }
+function f(x: E0) -> E0.V2 {
+    match (x) {
+        E0.V0 => E0.V2,
+        E0.V1 => E0.V2,
+        E0.V2 => E0.V2,
+        _ => x,
+    }
+}"#,
+),
+    ]))
+}
+
 // ── Assignment in narrowed branch ──────────────────────────────────────────────
 
 #[test]
