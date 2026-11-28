@@ -114,6 +114,8 @@ impl TypeCoercer for TypeIR {
                             CompletionState::Complete,
                         )),
                     )
+                } else if let [only] = candidates.as_slice() {
+                    self.coerce(ctx, target, Some(only))
                 } else {
                     array_helper::coerce_array_to_singular(
                         ctx,

@@ -16,7 +16,7 @@ test_deserializer_with_expected_score!(
     CLASS_FOO_INT_STRING,
     r#"{"age": 11, "name": "Greg"}"#,
     TypeIR::class("Foo"),
-    1
+    0
 );
 
 test_deserializer_with_expected_score!(
@@ -24,7 +24,7 @@ test_deserializer_with_expected_score!(
     CLASS_FOO_INT_STRING,
     r#"{"age": 21, "name": "Grog"}"#,
     TypeIR::class("Foo"),
-    1
+    0
 );
 
 test_failing_deserializer!(
@@ -61,7 +61,7 @@ test_deserializer_with_expected_score!(
     UNION_WITH_CHECKS,
     r#"{"bar": 5, "things":[]}"#,
     TypeIR::class("Either"),
-    3
+    2
 );
 
 test_deserializer_with_expected_score!(
@@ -69,7 +69,7 @@ test_deserializer_with_expected_score!(
     UNION_WITH_CHECKS,
     r#"{"bar": 15, "things":[]}"#,
     TypeIR::class("Either"),
-    3
+    2
 );
 
 test_failing_deserializer!(
@@ -90,7 +90,7 @@ test_deserializer_with_expected_score!(
     MAP_WITH_CHECKS,
     r#"{"foo": {"hello": 10, "there":13}}"#,
     TypeIR::class("Foo"),
-    2
+    1
 );
 
 test_deserializer_with_expected_score!(
@@ -98,7 +98,7 @@ test_deserializer_with_expected_score!(
     MAP_WITH_CHECKS,
     r#"{"foo": {"hello": 11, "there":13}}"#,
     TypeIR::class("Foo"),
-    2
+    1
 );
 
 const NESTED_CLASS_CONSTRAINTS: &str = r#"
@@ -116,7 +116,7 @@ test_deserializer_with_expected_score!(
     NESTED_CLASS_CONSTRAINTS,
     r#"{"inner": {"value": 15}}"#,
     TypeIR::class("Outer"),
-    1
+    0
 );
 
 const BLOCK_LEVEL: &str = r#"
