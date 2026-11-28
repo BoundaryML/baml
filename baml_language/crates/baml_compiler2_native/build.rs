@@ -64,14 +64,15 @@ fn main() {
     // The runtime is built four times: without `baml.http` for the
     // programs that call none of it and with it for the others, and each
     // of those again with the checks a test build links.
-    // A fifth is the library form a host program loads (`host-lib`): no
-    // `main`, lean, without `baml.http`.
+    // The library form a host program loads (`host-lib`, no `main`, lean)
+    // is built twice more: without `baml.http` and with it.
     for (variant, with_http, checked, library) in [
         ("", false, false, false),
         ("_HTTP", true, false, false),
         ("_CHECKED", false, true, false),
         ("_HTTP_CHECKED", true, true, false),
         ("_LIB", false, false, true),
+        ("_LIB_HTTP", true, false, true),
     ] {
         let (archive, native_libs) =
             build_runtime(&runtime_dir, &out_dir, with_http, checked, library);

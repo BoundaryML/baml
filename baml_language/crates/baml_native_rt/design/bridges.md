@@ -11,11 +11,12 @@ Status, on branch `antoniosarosi/native-bridges-poc`:
 | The library's interface as data, with a typed tree of every type (`native_pack --lib --describe`) | Built |
 | A support library per language | Built: `baml_native_host` (Rust; its core layer is what the other two build on), `baml_native_python` (pyo3), `baml_native_node` (Node-API) |
 | Bindings for the type-shapes fixture, in all three languages | Built by hand, in the shape today's generators emit. The generators are not changed |
+| HTTP and TLS from inside the library (`baml.http`) | Built, tested from all three languages |
 | Generators, LLM functions, generics, streaming, cancellation, calls from BAML into the host | Next |
 
 ## The decision
 
-**Results are copied.** When a call returns, its result is copied once, directly from BAML memory, into an ordinary host object: a pydantic model, a plain TypeScript object, a Rust struct. There is no protobuf and no other wire format in between.
+**Results are copied.** When a call returns, its result is copied once, directly from BAML memory, into an ordinary host object: a pydantic model, an instance of the generated TypeScript class, a Rust struct. There is no protobuf and no other wire format in between.
 
 User code does not get references into BAML memory. That idea, and why it waits, is in [ideas/host-handles-and-refs.md](ideas/host-handles-and-refs.md). In short:
 
@@ -174,7 +175,7 @@ Every build function checks all its inputs first, then allocates once, then turn
 
 | Piece | Where | What it is |
 |---|---|---|
-| Library form | `baml_compiler2_native`: `native_pack --lib`, `link.rs` | A `.dylib` linked against a runtime archive without `main` |
+| Library form | `baml_compiler2_native`: `native_pack --lib`, `link.rs` | A `.dylib` linked against the runtime's library form (no `main`): with `baml.http` when the object calls one of its natives, without it otherwise, as executables choose |
 | Export entry | `codegen/host.rs` | Per exported function, an entry with the C convention. It reads the arguments, calls the function under a catch-all, and returns the result or what was thrown |
 | Host shim | `codegen/host.rs` | Compiled code that every host-started task begins in, so no Rust frame sits under a parked task |
 | Export table | `codegen/host.rs` | Per function its entry, hash, name, signature and the descriptions of its parameters, result and throws type; per class or enum its class object and description |
@@ -347,6 +348,38 @@ How a call ends, in JavaScript:
 
 Also: arguments and results nest at most 200 levels (today's wire refuses at 33); `worker_threads` are not supported (the addon belongs to the first environment that loads it); instance methods, media, streams, tracing and `$baml` options are stubs that throw; an `int` beyond 2^53 loses precision, as today.
 
+## A real HTTP call (built)
+
+A BAML function in the library can send HTTP itself, with the runtime's own `baml.http` (`reqwest` and `rustls` on the library's I/O thread). The test functions are in `baml_native_host/tests/type_shapes/bridge_test.baml`:
+
+```baml
+class HttpReply { status int  body string }
+
+function http_get(url: string, timeout_ms: int) -> HttpReply {
+  let request = baml.http.Request.from_url(url).set_method("GET")
+    .set_timeout(baml.time.Duration.from_milliseconds(timeout_ms));
+  let response = baml.http.send(request);
+  HttpReply { status: response.status_code, body: response.text() }
+}
+
+function http_post_json(url: string, greeting: Greeting) -> Echo {
+  // the body is baml.json.stringify(greeting); the reply is read with baml.json.decode<Echo>
+}
+```
+
+`http.Response` is a class of the standard library and cannot cross, so the functions return classes of their own.
+
+- **Linking.** `link_library` links the runtime archive that has `baml.http` only when the object calls one of its natives, as `link` does for executables. The compiler builds that archive (`host-lib` with `baml.http`) beside the others. The library is 1.56 MB without HTTP and 4.55 MB with it (4.69 MB with `baml.json` as well); it then links the Security and CoreFoundation frameworks.
+- **Parking.** A request parks its task on the I/O thread, and the I/O thread's wake gives the host a turn when the reply comes, as for any other I/O. 100 requests at once to a server that delays each reply 300 ms finish in about 1 s from all three languages.
+- **Errors.** A refused connection is `baml.errors.Io`, a request past its `timeout` is `baml.errors.Timeout`: the same class names as today's SDKs give, checked by the same tests against both (`test_http.py`, `js/parity/http_parity.test.ts`).
+- **TLS.** One request to `https://example.com/`, by hand, from Rust (`cargo test --test http -- --ignored`), Python and Node: 200, "Example Domain", in about 0.1 s each. In the Python process today's `baml_bridge`, with its own HTTP and TLS code, was loaded too; nothing clashed.
+
+| Local round trip, one `await http_get(...)` after another | Today's SDK | Native |
+|---|---|---|
+| Python (#1285, outside load 0.40 cores; the server on a thread of the same process) | 135 µs | 78 µs |
+
+Tests: `baml_native_host/tests/http.rs` (Rust, its own test binary, since a process loads one library), `test_http.py` (Python) and `http_parity.test.ts` (Node). Each starts its own server on a loopback port: one GET, one JSON POST, 100 requests at once, a refused connection, a timeout.
+
 ## Measured
 
 One session on one Mac (Apple M5 Max, 18 cores), through `perfq --bench`, every binary run once untimed first. "Today's" is the generated SDK of the same sources (the type-shapes fixture plus `bridge_test`) over today's VM, release builds, called by the same script. Time is the median of interleaved rounds; instructions per call come from two sizes and their difference. For the arrays, time and instructions are per element; for arguments ("in") the instructions include building the argument, the same on both sides, and Python's are net of it.
@@ -434,6 +467,7 @@ Where the time goes:
 | A stack overflow in a frame too large to throw from ends the host's process | As in an executable (`unwind.rs`) |
 | A handle kept after it is freed may name another object | Safe, but not detected: no generations |
 | Describing a value stops 32 objects deep | A value that holds itself is written with a marker, `<nested too deep>` |
+| HTTP in the library | Linked only when a function calls `baml.http`: about 3 MB more, and the TLS library sets itself up when the library loads. The library also names `@rpath/libiconv.2.dylib`, which macOS resolves through its fallback path |
 | Timers end about 3 ms late | Executables do too |
 | arm64 macOS only | As for all native code today |
 
@@ -441,7 +475,7 @@ Where the time goes:
 
 - What both languages asked of the core: a string read without extra copies; bulk reads of scalar arrays; builders that take slices; a turn that hands its events back after it returns (so Python can release the GIL for the C turn alone); values of classes outside the interface (a structured description of a thrown value's class).
 - Generics: type arguments travel first in the values a call or an instance takes.
-- LLM functions: the standard library's LLM code does not compile natively yet.
+- LLM functions: the standard library's LLM code does not compile natively yet. `baml.http` and `baml.json` do, inside the library (above), so the transport an LLM call needs is there.
 - The generators: emit what the hand-written bindings show (Rust, Python, TypeScript).
 - Per-call options, cancellation, streaming.
 - Calls from BAML into the host.

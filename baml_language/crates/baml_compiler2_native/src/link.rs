@@ -116,17 +116,26 @@ pub fn link(object: &[u8], output: &Path, runtime: RuntimeBuild) -> Result<(), L
     }
 }
 
-/// The runtime archive of the library form (`host-lib`), with the system
-/// libraries it needs.
-const LIBRARY_RUNTIME: (&str, &str) = (
-    env!("BAML_NATIVE_RT_LIB_ARCHIVE"),
-    env!("BAML_NATIVE_RT_LIB_LINK_LIBS"),
-);
+/// The runtime archives of the library form (`host-lib`), with the system
+/// libraries each needs: without `baml.http` and with it. As for
+/// executables, only a library that calls a native of `baml.http` links the
+/// one with it (and its TLS library).
+const LIBRARY_RUNTIMES: [(&str, &str); 2] = [
+    (
+        env!("BAML_NATIVE_RT_LIB_ARCHIVE"),
+        env!("BAML_NATIVE_RT_LIB_LINK_LIBS"),
+    ),
+    (
+        env!("BAML_NATIVE_RT_LIB_HTTP_ARCHIVE"),
+        env!("BAML_NATIVE_RT_LIB_HTTP_LINK_LIBS"),
+    ),
+];
 
 /// Write `object` beside `output` and link it into the shared library
 /// `output`, which a host program loads: the runtime's library form, with
-/// no `main`. Only the `baml_lib_*` functions are exported, so the linker
-/// still drops what nothing reaches. A spike: no `baml.http`, macOS only.
+/// no `main`, and with `baml.http` when the object calls it. Only the
+/// `baml_lib_*` functions are exported, so the linker still drops what
+/// nothing reaches. macOS only.
 pub fn link_library(object: &[u8], output: &Path) -> Result<(), LinkError> {
     let mut object_path = output.as_os_str().to_owned();
     object_path.push(".o");
@@ -135,7 +144,10 @@ pub fn link_library(object: &[u8], output: &Path) -> Result<(), LinkError> {
         path: object_path.clone(),
         source,
     })?;
-    let (archive, libs) = LIBRARY_RUNTIME;
+    let calls_http = object
+        .windows(HTTP_NATIVE.len())
+        .any(|window| window == HTTP_NATIVE);
+    let (archive, libs) = LIBRARY_RUNTIMES[usize::from(calls_http)];
     let driver = std::env::var_os("CC").unwrap_or_else(|| "cc".into());
     let mut command = Command::new(&driver);
     command.arg("-dynamiclib").arg(&object_path).arg(archive);
