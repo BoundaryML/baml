@@ -191,7 +191,7 @@ impl Builder {
 }
 
 #[derive(Default)]
-enum RenderSetting<T> {
+pub(super) enum RenderSetting<T> {
     #[default]
     Auto,
     Always(T),
@@ -205,6 +205,19 @@ pub(crate) enum MapStyle {
 
     #[strum(serialize = "object")]
     ObjectLiteral,
+}
+
+/// The wire format requested from the model.
+///
+/// Rendering is dispatched through this enum so additional backends can be
+/// added without changing the template-call surface again.
+#[derive(Clone, Copy, Debug, Default, strum::EnumString, strum::VariantNames)]
+pub(crate) enum OutputFormatKind {
+    #[default]
+    #[strum(serialize = "json")]
+    Json,
+    #[strum(serialize = "xml")]
+    Xml,
 }
 
 /// Hoist classes setting.
@@ -224,15 +237,16 @@ pub(crate) enum HoistClasses {
 const INLINE_RENDER_ENUM_MAX_VALUES: usize = 6;
 
 pub struct RenderOptions {
-    prefix: RenderSetting<String>,
+    pub(super) prefix: RenderSetting<String>,
     pub(crate) or_splitter: String,
-    enum_value_prefix: RenderSetting<String>,
-    hoisted_class_prefix: RenderSetting<String>,
-    hoist_classes: HoistClasses,
-    always_hoist_enums: RenderSetting<bool>,
+    pub(super) enum_value_prefix: RenderSetting<String>,
+    pub(super) hoisted_class_prefix: RenderSetting<String>,
+    pub(super) hoist_classes: HoistClasses,
+    pub(super) always_hoist_enums: RenderSetting<bool>,
     map_style: MapStyle,
     quote_class_fields: bool,
-    render_null_as: RenderSetting<String>,
+    pub(super) render_null_as: RenderSetting<String>,
+    format: OutputFormatKind,
 }
 
 impl Default for RenderOptions {
@@ -247,6 +261,7 @@ impl Default for RenderOptions {
             map_style: MapStyle::TypeParameters,
             quote_class_fields: false,
             render_null_as: RenderSetting::Auto,
+            format: OutputFormatKind::Json,
         }
     }
 }
@@ -272,6 +287,7 @@ impl RenderOptions {
         hoist_classes: Option<HoistClasses>,
         quote_class_fields: Option<bool>,
         render_null_as: Option<Option<String>>,
+        format: Option<OutputFormatKind>,
     ) -> Self {
         Self {
             prefix: prefix.map_or(RenderSetting::Auto, |p| {
@@ -292,6 +308,7 @@ impl RenderOptions {
             render_null_as: render_null_as
                 .flatten()
                 .map_or(RenderSetting::Auto, RenderSetting::Always),
+            format: format.unwrap_or_default(),
         }
     }
 
@@ -821,6 +838,13 @@ impl OutputFormatContent {
     }
 
     pub fn render(&self, options: RenderOptions) -> Result<Option<String>, minijinja::Error> {
+        match options.format {
+            OutputFormatKind::Json => self.render_json(options),
+            OutputFormatKind::Xml => super::xml::render(self, &options),
+        }
+    }
+
+    fn render_json(&self, options: RenderOptions) -> Result<Option<String>, minijinja::Error> {
         // Render context. Only contains hoisted types for now.
         let mut render_ctx = RenderCtx {
             hoisted_enums: IndexSet::new(),
@@ -1124,6 +1148,7 @@ mod tests {
                 None,
                 None,
                 Some(Some("omit".to_string())),
+                None,
             ))
             .unwrap();
         assert_eq!(rendered, Some("string or omit".into()));
@@ -1143,6 +1168,7 @@ mod tests {
                 None,
                 None,
                 Some(Some("omit".to_string())),
+                None,
             ))
             .unwrap()
             .unwrap();
@@ -1161,6 +1187,879 @@ mod tests {
         assert_eq!(
             rendered,
             Some("Answer with a JSON Array using this schema:\nstring[]".to_string())
+        );
+    }
+
+    #[test]
+    fn render_xml_class_collections_optional_and_union() {
+        let enums = vec![Enum {
+            name: Name::new("Status".to_string()),
+            values: vec![
+                (Name::new("ACTIVE".to_string()), None),
+                (Name::new("INACTIVE".to_string()), None),
+            ],
+            constraints: Vec::new(),
+        }];
+        let classes = vec![
+            Class {
+                name: Name::new("Person".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (
+                        Name::new("status".to_string()),
+                        TypeIR::r#enum("Status"),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("tags".to_string()),
+                        TypeIR::list(TypeIR::string()),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("address".to_string()),
+                        TypeIR::class("Address"),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("metadata".to_string()),
+                        TypeIR::map(TypeIR::string(), TypeIR::int()),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("nickname".to_string()),
+                        TypeIR::optional(TypeIR::string()),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("verified".to_string()),
+                        TypeIR::union(vec![TypeIR::bool(), TypeIR::int()]),
+                        None,
+                        false,
+                    ),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+            Class {
+                name: Name::new("Address".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![(
+                    Name::new("street".to_string()),
+                    TypeIR::string(),
+                    None,
+                    false,
+                )],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+        ];
+        let content = OutputFormatContent::target(TypeIR::class("Person"))
+            .enums(enums)
+            .classes(classes)
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Answer in XML using this structure:
+<Person>
+  <status>ACTIVE | INACTIVE</status>
+  <tags>
+    <item>string</item>
+  </tags>
+  <address>
+    <Address>
+      <street>string</street>
+    </Address>
+  </address>
+  <metadata>
+    <entry>
+      <key>string</key>
+      <value>int</value>
+    </entry>
+  </metadata>
+  <nickname>string or null</nickname>
+  <verified>bool or int</verified>
+</Person>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_rejects_colliding_sanitized_field_tags() {
+        let content = OutputFormatContent::target(TypeIR::class("Person"))
+            .classes(vec![Class {
+                name: Name::new("Person".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (
+                        Name::new("first name".to_string()),
+                        TypeIR::string(),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("first_name".to_string()),
+                        TypeIR::string(),
+                        None,
+                        false,
+                    ),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            }])
+            .build();
+
+        let error = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap_err();
+
+        assert_eq!(error.kind(), minijinja::ErrorKind::BadSerialization);
+        assert!(error
+            .to_string()
+            .contains("multiple fields use the <first_name> tag"));
+    }
+
+    #[test]
+    fn render_xml_includes_root_and_nested_class_descriptions() {
+        let content = OutputFormatContent::target(TypeIR::class("Person"))
+            .classes(vec![
+                Class {
+                    name: Name::new("Person".to_string()),
+                    description: Some("A person record".to_string()),
+                    namespace: baml_types::StreamingMode::NonStreaming,
+                    fields: vec![(
+                        Name::new("address".to_string()),
+                        TypeIR::class("Address"),
+                        None,
+                        false,
+                    )],
+                    constraints: Vec::new(),
+                    streaming_behavior: Default::default(),
+                },
+                Class {
+                    name: Name::new("Address".to_string()),
+                    description: Some("A mailing address".to_string()),
+                    namespace: baml_types::StreamingMode::NonStreaming,
+                    fields: vec![(
+                        Name::new("street".to_string()),
+                        TypeIR::string(),
+                        None,
+                        false,
+                    )],
+                    constraints: Vec::new(),
+                    streaming_behavior: Default::default(),
+                },
+            ])
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Answer in XML using this structure:
+<Person>
+  <!-- A person record -->
+  <address>
+    <Address>
+      <!-- A mailing address -->
+      <street>string</street>
+    </Address>
+  </address>
+</Person>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_recursive_class_uses_reference() {
+        let classes = vec![Class {
+            name: Name::new("Node".to_string()),
+            description: None,
+            namespace: baml_types::StreamingMode::NonStreaming,
+            fields: vec![
+                (Name::new("value".to_string()), TypeIR::int(), None, false),
+                (
+                    Name::new("next".to_string()),
+                    TypeIR::optional(TypeIR::class("Node")),
+                    None,
+                    false,
+                ),
+            ],
+            constraints: Vec::new(),
+            streaming_behavior: Default::default(),
+        }];
+        let content = OutputFormatContent::target(TypeIR::class("Node"))
+            .classes(classes)
+            .recursive_classes(IndexSet::from(["Node".to_string()]))
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Answer in XML using this structure:
+<Node>
+  <value>int</value>
+  <next>Node or null</next>
+</Node>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_nested_arrays_and_map_with_class_values() {
+        let content = OutputFormatContent::target(TypeIR::class("AddressBook"))
+            .classes(vec![
+                Class {
+                    name: Name::new("AddressBook".to_string()),
+                    description: None,
+                    namespace: baml_types::StreamingMode::NonStreaming,
+                    fields: vec![
+                        (
+                            Name::new("matrix".to_string()),
+                            TypeIR::list(TypeIR::list(TypeIR::int())),
+                            None,
+                            false,
+                        ),
+                        (
+                            Name::new("addresses".to_string()),
+                            TypeIR::list(TypeIR::class("Address")),
+                            None,
+                            false,
+                        ),
+                        (
+                            Name::new("byName".to_string()),
+                            TypeIR::map(TypeIR::string(), TypeIR::class("Address")),
+                            None,
+                            false,
+                        ),
+                    ],
+                    constraints: Vec::new(),
+                    streaming_behavior: Default::default(),
+                },
+                Class {
+                    name: Name::new("Address".to_string()),
+                    description: None,
+                    namespace: baml_types::StreamingMode::NonStreaming,
+                    fields: vec![
+                        (Name::new("city".to_string()), TypeIR::string(), None, false),
+                        (Name::new("zip".to_string()), TypeIR::int(), None, false),
+                    ],
+                    constraints: Vec::new(),
+                    streaming_behavior: Default::default(),
+                },
+            ])
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Answer in XML using this structure:
+<AddressBook>
+  <matrix>
+    <item>
+      <item>int</item>
+    </item>
+  </matrix>
+  <addresses>
+    <AddressList>
+      <Address>
+        <city>string</city>
+        <zip>int</zip>
+      </Address>
+    </AddressList>
+  </addresses>
+  <byName>
+    <entry>
+      <key>string</key>
+      <value>
+        <Address>
+          <city>string</city>
+          <zip>int</zip>
+        </Address>
+      </value>
+    </entry>
+  </byName>
+</AddressBook>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_arrays_and_unions_with_multiple_class_variants() {
+        let classes = vec![
+            Class {
+                name: Name::new("Cat".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (Name::new("name".to_string()), TypeIR::string(), None, false),
+                    (Name::new("lives".to_string()), TypeIR::int(), None, false),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+            Class {
+                name: Name::new("Dog".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (Name::new("name".to_string()), TypeIR::string(), None, false),
+                    (
+                        Name::new("trained".to_string()),
+                        TypeIR::bool(),
+                        None,
+                        false,
+                    ),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+            Class {
+                name: Name::new("Bird".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (
+                        Name::new("species".to_string()),
+                        TypeIR::string(),
+                        None,
+                        false,
+                    ),
+                    (Name::new("canFly".to_string()), TypeIR::bool(), None, false),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+        ];
+        let variants = TypeIR::union(vec![
+            TypeIR::class("Cat"),
+            TypeIR::class("Dog"),
+            TypeIR::class("Bird"),
+        ]);
+        let content = OutputFormatContent::target(TypeIR::list(variants))
+            .classes(classes)
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Answer in XML using this structure:
+<list>
+  <Cat>
+    <name>string</name>
+    <lives>int</lives>
+  </Cat>
+
+  OR
+
+  <Dog>
+    <name>string</name>
+    <trained>bool</trained>
+  </Dog>
+
+  OR
+
+  <Bird>
+    <species>string</species>
+    <canFly>bool</canFly>
+  </Bird>
+</list>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_top_level_class_array_uses_class_list_wrapper() {
+        let content = OutputFormatContent::target(TypeIR::list(TypeIR::class("Address")))
+            .classes(vec![Class {
+                name: Name::new("Address".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![(
+                    Name::new("street".to_string()),
+                    TypeIR::string(),
+                    None,
+                    false,
+                )],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            }])
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Answer in XML using this structure:
+<AddressList>
+  <Address>
+    <street>string</street>
+  </Address>
+</AddressList>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_respects_enum_and_nullable_options() {
+        let content = OutputFormatContent::target(TypeIR::class("Task"))
+            .enums(vec![Enum {
+                name: Name::new("Priority".to_string()),
+                values: vec![
+                    (Name::new("LOW".to_string()), None),
+                    (Name::new("HIGH".to_string()), None),
+                ],
+                constraints: Vec::new(),
+            }])
+            .classes(vec![Class {
+                name: Name::new("Task".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (
+                        Name::new("priority".to_string()),
+                        TypeIR::r#enum("Priority"),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("note".to_string()),
+                        TypeIR::optional(TypeIR::string()),
+                        None,
+                        false,
+                    ),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            }])
+            .build();
+
+        let rendered = content
+            .render(RenderOptions::new(
+                None,
+                Some(" | ".to_string()),
+                Some(Some("* ".to_string())),
+                Some(true),
+                None,
+                None,
+                None,
+                None,
+                Some(Some("omit".to_string())),
+                Some(OutputFormatKind::Xml),
+            ))
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Priority
+----
+* LOW
+* HIGH
+
+Answer in XML using this structure:
+<Task>
+  <priority>Priority</priority>
+  <note>string | omit</note>
+</Task>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_top_level_union_uses_class_tags_and_bare_or() {
+        let classes = vec![
+            Class {
+                name: Name::new("TextContent".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![(Name::new("text".to_string()), TypeIR::string(), None, false)],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+            Class {
+                name: Name::new("ImageContent".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (Name::new("url".to_string()), TypeIR::string(), None, false),
+                    (
+                        Name::new("alt_text".to_string()),
+                        TypeIR::string(),
+                        None,
+                        false,
+                    ),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+        ];
+        let content = OutputFormatContent::target(TypeIR::union(vec![
+            TypeIR::class("TextContent"),
+            TypeIR::class("ImageContent"),
+        ]))
+        .classes(classes)
+        .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Answer in XML using any of these structures:
+<TextContent>
+  <text>string</text>
+</TextContent>
+
+OR
+
+<ImageContent>
+  <url>string</url>
+  <alt_text>string</alt_text>
+</ImageContent>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_resolves_alias_variants_before_rendering() {
+        let content = OutputFormatContent::target(TypeIR::union(vec![
+            TypeIR::recursive_type_alias("Values"),
+            TypeIR::class("Fallback"),
+        ]))
+        .classes(vec![Class {
+            name: Name::new("Fallback".to_string()),
+            description: None,
+            namespace: baml_types::StreamingMode::NonStreaming,
+            fields: vec![(Name::new("value".to_string()), TypeIR::int(), None, false)],
+            constraints: Vec::new(),
+            streaming_behavior: Default::default(),
+        }])
+        .structural_recursive_aliases(IndexMap::from([(
+            "Values".to_string(),
+            TypeIR::list(TypeIR::string()),
+        )]))
+        .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Answer in XML using any of these structures:
+<list>
+  <item>string</item>
+</list>
+
+OR
+
+<Fallback>
+  <value>int</value>
+</Fallback>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_rejects_unsupported_union_variants() {
+        let unsupported = [
+            (
+                TypeIR::tuple(vec![TypeIR::string()]),
+                "Tuple type is not supported in outputs",
+            ),
+            (
+                TypeIR::arrow(vec![TypeIR::string()], TypeIR::string()),
+                "Arrow type is not supported in LLM function outputs",
+            ),
+            (TypeIR::top(), "Top type is not supported in outputs"),
+        ];
+
+        for (variant, message) in unsupported {
+            let content =
+                OutputFormatContent::target(TypeIR::union(vec![variant, TypeIR::string()])).build();
+            let error = content
+                .render(RenderOptions {
+                    format: OutputFormatKind::Xml,
+                    ..Default::default()
+                })
+                .unwrap_err();
+
+            assert_eq!(error.kind(), minijinja::ErrorKind::BadSerialization);
+            assert!(error.to_string().contains(message));
+        }
+    }
+
+    #[test]
+    fn render_xml_hoists_recursive_nested_class_with_prefix() {
+        let classes = vec![
+            Class {
+                name: Name::new("Node".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (Name::new("value".to_string()), TypeIR::int(), None, false),
+                    (
+                        Name::new("next".to_string()),
+                        TypeIR::optional(TypeIR::class("Node")),
+                        None,
+                        false,
+                    ),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+            Class {
+                name: Name::new("LinkedList".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (
+                        Name::new("head".to_string()),
+                        TypeIR::optional(TypeIR::class("Node")),
+                        None,
+                        false,
+                    ),
+                    (Name::new("len".to_string()), TypeIR::int(), None, false),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+        ];
+        let content = OutputFormatContent::target(TypeIR::class("LinkedList"))
+            .classes(classes)
+            .recursive_classes(IndexSet::from(["Node".to_string()]))
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                hoisted_class_prefix: RenderSetting::Always("type".to_string()),
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"type Node
+<Node>
+  <value>int</value>
+  <next>Node or null</next>
+</Node>
+
+Answer in XML using this structure:
+<LinkedList>
+  <head>Node or null</head>
+  <len>int</len>
+</LinkedList>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_optional_nested_class_appends_null_inline() {
+        let content = OutputFormatContent::target(TypeIR::class("Person"))
+            .classes(vec![
+                Class {
+                    name: Name::new("Person".to_string()),
+                    description: None,
+                    namespace: baml_types::StreamingMode::NonStreaming,
+                    fields: vec![(
+                        Name::new("address".to_string()),
+                        TypeIR::optional(TypeIR::class("Address")),
+                        None,
+                        false,
+                    )],
+                    constraints: Vec::new(),
+                    streaming_behavior: Default::default(),
+                },
+                Class {
+                    name: Name::new("Address".to_string()),
+                    description: None,
+                    namespace: baml_types::StreamingMode::NonStreaming,
+                    fields: vec![(
+                        Name::new("street".to_string()),
+                        TypeIR::string(),
+                        None,
+                        false,
+                    )],
+                    constraints: Vec::new(),
+                    streaming_behavior: Default::default(),
+                },
+            ])
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                or_splitter: " & < ".to_string(),
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Answer in XML using this structure:
+<Person>
+  <address>
+    <Address>
+      <street>string</street>
+    </Address> &amp; &lt; null
+  </address>
+</Person>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_respects_hoisted_class_subset() {
+        let content = OutputFormatContent::target(TypeIR::class("Person"))
+            .classes(vec![
+                Class {
+                    name: Name::new("Person".to_string()),
+                    description: None,
+                    namespace: baml_types::StreamingMode::NonStreaming,
+                    fields: vec![(
+                        Name::new("address".to_string()),
+                        TypeIR::class("Address"),
+                        None,
+                        false,
+                    )],
+                    constraints: Vec::new(),
+                    streaming_behavior: Default::default(),
+                },
+                Class {
+                    name: Name::new("Address".to_string()),
+                    description: None,
+                    namespace: baml_types::StreamingMode::NonStreaming,
+                    fields: vec![(
+                        Name::new("street".to_string()),
+                        TypeIR::string(),
+                        None,
+                        false,
+                    )],
+                    constraints: Vec::new(),
+                    streaming_behavior: Default::default(),
+                },
+            ])
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                hoist_classes: HoistClasses::Subset(vec!["Address".to_string()]),
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"<Address>
+  <street>string</street>
+</Address>
+
+Answer in XML using this structure:
+<Person>
+  <address>Address</address>
+</Person>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_uses_return_type_prefixes() {
+        let xml = |content: OutputFormatContent| {
+            content
+                .render(RenderOptions {
+                    format: OutputFormatKind::Xml,
+                    ..Default::default()
+                })
+                .unwrap()
+                .unwrap()
+        };
+
+        assert_eq!(
+            xml(OutputFormatContent::target(TypeIR::string()).build()),
+            "Answer as XML:<value>string</value>"
+        );
+        assert_eq!(
+            xml(OutputFormatContent::target(TypeIR::int()).build()),
+            "Answer as XML:<value>int</value>"
+        );
+        assert_eq!(
+            xml(OutputFormatContent::target(TypeIR::list(TypeIR::string())).build()),
+            "Answer in XML using this structure:\n<list>\n  <item>string</item>\n</list>"
+        );
+        assert_eq!(
+            xml(OutputFormatContent::target(TypeIR::optional(TypeIR::string())).build()),
+            "Answer in XML using this structure:\n<value>string or null</value>"
+        );
+
+        let enum_content = OutputFormatContent::target(TypeIR::r#enum("Status"))
+            .enums(vec![Enum {
+                name: Name::new("Status".to_string()),
+                values: vec![
+                    (Name::new("ACTIVE".to_string()), None),
+                    (Name::new("INACTIVE".to_string()), None),
+                ],
+                constraints: Vec::new(),
+            }])
+            .build();
+        assert_eq!(
+            xml(enum_content),
+            "Answer in XML using any of these values:\n<Status>ACTIVE | INACTIVE</Status>"
         );
     }
 
@@ -3559,6 +4458,7 @@ Answer in JSON using this schema: Ret"#
             None,       // hoist_classes
             None,       // quote_class_fields
             None,       // render_null_as
+            None,       // format
         );
 
         let rendered = content.render(options).unwrap().unwrap();
