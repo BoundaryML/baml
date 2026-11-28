@@ -14,6 +14,10 @@ BAML is the programming language for agents.
 
 [Homepage](https://www.boundaryml.com/) | [Explore BAML](https://www.boundaryml.com/explore) | [Discord](https://www.boundaryml.com/discord)
 
+<p align="center">
+  <b>English</b> · <a href="https://github.com/BoundaryML/baml/blob/canary/README.zh.md">简体中文</a>
+</p>
+
 </div>
 
 BAML looks like TypeScript, but every feature is built so agents make fewer mistakes:
