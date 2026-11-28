@@ -32,6 +32,7 @@ use std::{
 mod command;
 pub mod csharp;
 pub mod fixtures;
+pub mod ruby_sorbet;
 
 pub use command::{assert_stdout_contains, run_command};
 

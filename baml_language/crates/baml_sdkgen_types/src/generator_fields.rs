@@ -36,6 +36,9 @@ pub enum OutputType {
     /// Java SDK (`com.boundaryml:baml-bridge` runtime).
     #[strum(serialize = "java")]
     Java,
+    /// Ruby SDK with Sorbet types (`baml-bridge` gem runtime).
+    #[strum(serialize = "ruby/sorbet")]
+    RubySorbet,
     /// C++17 SDK (self-contained source tree; dlopens the shared runtime).
     #[strum(serialize = "cpp")]
     Cpp,
@@ -61,6 +64,7 @@ impl OutputType {
             Self::Go => "go",
             Self::Rust => "rust",
             Self::Java => "java",
+            Self::RubySorbet => "ruby/sorbet",
             Self::Cpp => "cpp",
             Self::CSharp => "csharp",
         }
@@ -69,7 +73,9 @@ impl OutputType {
     /// The naming conventions this generator implements.
     pub const fn naming_support(self) -> NamingSupport {
         match self {
-            Self::Go | Self::CSharp => NamingSupport::Only(NamingConvention::Language),
+            Self::Go | Self::CSharp | Self::RubySorbet => {
+                NamingSupport::Only(NamingConvention::Language)
+            }
             Self::Rust | Self::PythonPydantic | Self::PythonPydanticV1 => NamingSupport::Either {
                 default: NamingConvention::Language,
             },
@@ -166,6 +172,7 @@ mod tests {
         for output_type in [
             OutputType::Go,
             OutputType::CSharp,
+            OutputType::RubySorbet,
             OutputType::Rust,
             OutputType::PythonPydantic,
             OutputType::PythonPydanticV1,

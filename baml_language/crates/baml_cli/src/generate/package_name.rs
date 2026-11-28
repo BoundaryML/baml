@@ -49,7 +49,11 @@ pub(super) fn validate(output_type: OutputType, name: &str) -> Result<(), Packag
             "expected a single directory name of ASCII letters, digits, `_` and `-` that is not \
              a reserved Windows file name",
         ),
-        OutputType::Swift | OutputType::Java | OutputType::Cpp | OutputType::CSharp => {
+        OutputType::Swift
+        | OutputType::Java
+        | OutputType::Cpp
+        | OutputType::CSharp
+        | OutputType::RubySorbet => {
             return Err(PackageNameError::Unsupported);
         }
     };

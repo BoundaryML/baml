@@ -1,0 +1,166 @@
+//! Ruby/Sorbet declarations and registrations for the whole BAML symbol pool.
+mod alias_components;
+mod descriptors;
+mod emit;
+mod names;
+mod package;
+mod types;
+
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    path::PathBuf,
+};
+
+use baml_sdkgen_types::{Name, NamingConvention, SkipWarning, Symbol, SymbolPool};
+use emit::Emitter;
+use names::NameTable;
+use types::ruby_type;
+
+pub fn to_source_code_with_bytecode(
+    pool: &SymbolPool,
+    bytecode: &[u8],
+    naming: NamingConvention,
+    metadata: Option<&str>,
+) -> HashMap<PathBuf, String> {
+    to_source_code_with_bytecode_and_skipped(pool, bytecode, naming, metadata).0
+}
+
+/// Reports omitted declarations, including methods, in the CLI's shared format.
+pub fn to_source_code_with_bytecode_and_warnings(
+    pool: &SymbolPool,
+    bytecode: &[u8],
+    naming: NamingConvention,
+    metadata: Option<&str>,
+) -> (HashMap<PathBuf, String>, Vec<SkipWarning>) {
+    let (files, skipped) =
+        to_source_code_with_bytecode_and_skipped(pool, bytecode, naming, metadata);
+    let warnings = skipped
+        .into_iter()
+        .map(|fqn| {
+            let local = pool.keys().any(|name| {
+                name.is_local() && (fqn == name.to_string() || fqn.starts_with(&format!("{name}.")))
+            });
+            SkipWarning {
+                fqn,
+                local,
+                reason: "declaration uses a type or callable feature unsupported by Ruby/Sorbet"
+                    .into(),
+            }
+        })
+        .collect();
+    (files, warnings)
+}
+
+/// Also returns sorted BAML names omitted from the generated surface.
+pub fn to_source_code_with_bytecode_and_skipped(
+    pool: &SymbolPool,
+    bytecode: &[u8],
+    naming: NamingConvention,
+    metadata: Option<&str>,
+) -> (HashMap<PathBuf, String>, Vec<String>) {
+    let names = NameTable::build(pool, naming);
+    let symbols: BTreeMap<_, _> = pool.iter().collect();
+    let mut supported: BTreeSet<Name> = symbols
+        .iter()
+        .filter_map(|(n, s)| match s {
+            // A host's own value never gets a Ruby class of its own.
+            Symbol::Class(class)
+                if matches!(
+                    class.crossing,
+                    baml_sdkgen_types::ClassCrossing::Prompt
+                        | baml_sdkgen_types::ClassCrossing::HostValue
+                ) =>
+            {
+                None
+            }
+            Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_) => Some((*n).clone()),
+            Symbol::Function(_) => None,
+        })
+        .collect();
+    // Remove declarations referring to omitted types, including transitive edges.
+    loop {
+        // Cache each alias's direct support check. Named references let the fixed
+        // point remove transitive omissions without expanding the alias graph.
+        let alias_support: BTreeMap<_, _> = supported
+            .iter()
+            .filter_map(|name| match pool.get(name) {
+                Some(Symbol::TypeAlias(alias)) => Some((
+                    name,
+                    ruby_type(&alias.resolves_to, &supported, &names).is_some(),
+                )),
+                _ => None,
+            })
+            .collect();
+        let rejected: Vec<_> = supported
+            .iter()
+            .filter(|n| match pool.get(*n) {
+                // An opaque instance crosses by reference: its fields never reach Ruby.
+                Some(Symbol::Class(c))
+                    if c.crossing == baml_sdkgen_types::ClassCrossing::Opaque =>
+                {
+                    false
+                }
+                Some(Symbol::Class(c)) => c
+                    .properties
+                    .iter()
+                    .any(|p| ruby_type(&p.ty, &supported, &names).is_none()),
+                Some(Symbol::TypeAlias(_)) => !alias_support[*n],
+                _ => false,
+            })
+            .cloned()
+            .collect();
+        if rejected.is_empty() {
+            break;
+        }
+        for n in rejected {
+            supported.remove(&n);
+        }
+    }
+    let mut emitter = Emitter {
+        pool,
+        supported: &supported,
+        naming,
+        names,
+        registry: String::new(),
+        shells: String::new(),
+        aliases: String::new(),
+        skipped: BTreeSet::new(),
+    };
+    let mut namespaces: BTreeMap<String, String> = BTreeMap::new();
+    for (name, symbol) in symbols {
+        let module = emitter.names.module_name(name);
+        let body = namespaces.entry(module.clone()).or_default();
+        match symbol {
+            Symbol::Class(_) | Symbol::Enum(_) if supported.contains(name) => match symbol {
+                Symbol::Class(class) => emitter.class(name, class, body),
+                Symbol::Enum(enum_) => emitter.enum_(name, enum_, body),
+                _ => unreachable!(),
+            },
+            Symbol::TypeAlias(alias) if supported.contains(name) => {
+                emitter.type_alias(name, alias, pool);
+            }
+            Symbol::Function(function) => {
+                emitter.function(&module, &name.to_string(), function, None, &[], body);
+            }
+            _ => {
+                emitter.skipped.insert(name.to_string());
+                if let Symbol::Class(class) = symbol {
+                    emitter.skipped.extend(
+                        class
+                            .static_methods
+                            .iter()
+                            .chain(&class.instance_methods)
+                            .map(|m| format!("{name}.{}", m.name)),
+                    );
+                }
+            }
+        }
+    }
+    let files = package::emit(namespaces, &emitter, bytecode, metadata);
+    (files, emitter.skipped.into_iter().collect())
+}
+
+#[cfg(test)]
+mod review_tests;
+#[cfg(test)]
+mod tests;
