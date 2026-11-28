@@ -45,7 +45,10 @@
 
 use baml_compiler2_ast::{Expr, ExprBody, ExprId, Stmt, StmtId, traverse::BodyNode};
 use baml_compiler2_hir::semantic_index::BindingId;
-use baml_type::interned::{InferTy, Ty};
+use baml_type::{
+    interned::{InferTy, Ty},
+    normalize::TypeContext,
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{Diverges, Expectation, InferenceContext};
@@ -418,19 +421,85 @@ impl InferenceContext<'_> {
     }
 
     /// Set-subtraction on canonical members: drop the members provably
-    /// inside `matched`; nothing dropped leaves the scrutinee unchanged
+    /// inside `matched`; bool or enum member splits into its values
+    /// when an arm covers some; nothing dropped leaves the scrutinee unchanged
     /// (never a fabricated narrower type), everything dropped is `never`.
     pub(super) fn subtract_narrow(&mut self, scrut: &Ty, matched: &Ty) -> Ty {
         let members: Vec<Ty> = match scrut.kind() {
             InferTy::Union(members) => members.to_vec(),
             _ => vec![scrut.clone()],
         };
-        let kept: Vec<Ty> = members
-            .iter()
-            .filter(|member| !self.provable_subtype(member, matched))
-            .cloned()
-            .collect();
-        if kept.len() == members.len() {
+        let mut kept: Vec<Ty> = Vec::new();
+        let mut changed = false;
+        for member in &members {
+            if self.provable_subtype(member, matched) {
+                changed = true;
+                continue;
+            }
+            match member.kind() {
+                InferTy::Bool => {
+                    let pieces: Vec<Ty> = vec![
+                        Ty::intern(InferTy::Literal(
+                            baml_base::Literal::Bool(true),
+                            baml_type::Freshness::Regular,
+                        )),
+                        Ty::intern(InferTy::Literal(
+                            baml_base::Literal::Bool(false),
+                            baml_type::Freshness::Regular,
+                        )),
+                    ];
+                    let mut pieces_unproven: Vec<Ty> = Vec::new();
+                    for piece in &pieces {
+                        if !self.provable_subtype(piece, matched) {
+                            pieces_unproven.push(piece.clone());
+                        }
+                    }
+                    if pieces_unproven.len() == pieces.len() {
+                        kept.push(member.clone());
+                    } else {
+                        changed = true;
+                        for piece in &pieces_unproven {
+                            kept.push(piece.clone());
+                        }
+                    }
+                }
+                InferTy::Enum(qtn) => {
+                    let pieces: Vec<Ty> =
+                        self.facts
+                            .enum_variants(qtn)
+                            .map_or_else(Vec::new, |variants| {
+                                variants
+                                    .into_iter()
+                                    .map(|variant| {
+                                        Ty::intern(InferTy::EnumVariant(qtn.clone(), variant))
+                                    })
+                                    .collect()
+                            });
+                    if pieces.is_empty() {
+                        kept.push(member.clone());
+                    } else {
+                        let mut pieces_unproven: Vec<Ty> = Vec::new();
+                        for piece in &pieces {
+                            if !self.provable_subtype(piece, matched) {
+                                pieces_unproven.push(piece.clone());
+                            }
+                        }
+                        if pieces_unproven.len() == pieces.len() {
+                            kept.push(member.clone());
+                        } else {
+                            changed = true;
+                            for piece in &pieces_unproven {
+                                kept.push(piece.clone());
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    kept.push(member.clone());
+                }
+            }
+        }
+        if !changed {
             return scrut.clone();
         }
         // Filtering never REWRITES the survivors (TS's `getTypeWithFacts`
