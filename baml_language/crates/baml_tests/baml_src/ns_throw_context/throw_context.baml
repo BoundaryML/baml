@@ -129,3 +129,149 @@ test "throw_context_preserves_inferred_and_open_effects" {
     };
     assert.equal(open, "other")
 }
+
+class BaseError {
+    code: string,
+}
+
+class LimitError {
+    code: string,
+}
+
+type SendError = BaseError | LimitError;
+
+function throwAliasMembers(x: int) -> int throws SendError {
+    if (x < 0) {
+        throw BaseError { code: "negative" };
+    }
+    if (x > 9) {
+        throw LimitError { code: "limit" };
+    }
+    x
+}
+
+function rethrowAliasMembers(x: int) -> int throws SendError {
+    if (x > 99) {
+        throw LimitError { code: "far" };
+    }
+    throwAliasMembers(x) catch (e) {
+        _ => {
+            throw e;
+        },
+    }
+}
+
+function throwOneAliasMember() -> int throws SendError {
+    throw LimitError { code: "one" };
+}
+
+// Throws nothing the alias stands for, so E0097 names the alias.
+function throwNoAliasMember() -> int throws SendError {
+    1
+}
+
+test "throw_context_union_alias_members" {
+    let base = throwAliasMembers(-1) catch (e) {
+        BaseError => e.code,
+        LimitError => "wrong",
+    };
+    assert.equal(base, "negative")
+    let limit = rethrowAliasMembers(10) catch (e) {
+        BaseError => "wrong",
+        LimitError => e.code,
+    };
+    assert.equal(limit, "limit")
+    let far = rethrowAliasMembers(100) catch (e) {
+        BaseError => "wrong",
+        LimitError => e.code,
+    };
+    assert.equal(far, "far")
+    let one = throwOneAliasMember() catch (e) {
+        BaseError => "wrong",
+        LimitError => e.code,
+    };
+    assert.equal(one, "one")
+    assert.equal(throwNoAliasMember(), 1)
+}
+
+function throwAliasAndString(x: int) -> int throws SendError | string {
+    if (x < 0) {
+        throw BaseError { code: "negative" };
+    }
+    if (x > 9) {
+        throw "limit";
+    }
+    x
+}
+
+type ElementCode = int;
+
+type ElementCodes = ElementCode[];
+
+function throwNestedAlias(codes: int[]) -> int throws ElementCodes {
+    throw codes;
+}
+
+test "throw_context_alias_in_union_and_container" {
+    let base = throwAliasAndString(-1) catch (e) {
+        BaseError => e.code,
+        LimitError => "wrong",
+        string => e,
+    };
+    assert.equal(base, "negative")
+    let limit = throwAliasAndString(10) catch (e) {
+        BaseError => "wrong",
+        LimitError => "wrong",
+        string => e,
+    };
+    assert.equal(limit, "limit")
+    let size = throwNestedAlias([1, 2]) catch (e) {
+        int[] => e.length(),
+    };
+    assert.equal(size, 2)
+}
+
+function throwOnlyString() -> int throws ElementCodes | string {
+    throw "only";
+}
+
+type CodeTree = int | CodeTree[];
+
+type Ping = string | Pong[];
+
+type Pong = int | Ping[];
+
+function throwTreeLeaf() -> int throws CodeTree {
+    throw 1;
+}
+
+function throwTreeBranch(branch: CodeTree[]) -> int throws CodeTree {
+    throw branch;
+}
+
+function throwPongs(pongs: Pong[]) -> int throws Ping {
+    throw pongs;
+}
+
+test "throw_context_recursive_aliases" {
+    let leaf = throwTreeLeaf() catch (e) {
+        int => e,
+        CodeTree[] => -1,
+    };
+    assert.equal(leaf, 1)
+    let branch = throwTreeBranch([1, [2, 3]]) catch (e) {
+        int => -1,
+        CodeTree[] => e.length(),
+    };
+    assert.equal(branch, 2)
+    let pongs = throwPongs([1, ["a"]]) catch (e) {
+        string => -1,
+        Pong[] => e.length(),
+    };
+    assert.equal(pongs, 2)
+    let only = throwOnlyString() catch (e) {
+        ElementCodes => "wrong",
+        string => e,
+    };
+    assert.equal(only, "only")
+}
