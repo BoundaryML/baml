@@ -1,0 +1,568 @@
+# frozen_string_literal: true
+
+module Baml
+  module Bridge
+    module Encode
+      Node = Struct.new(:kind, :ty, :value, :children, :path, :evidence, keyword_init: true)
+
+      # Fields learn one binding per parameter. A known union member absorbs
+      # a variable as never; empty containers defer to later concrete evidence.
+      class Solution
+        def initialize(work: nil, substitutions: nil)
+          @work = work
+          @substitutions = substitutions
+          @bindings = {}
+          @conflicts = {}
+        end
+
+        def learn(template, found, type_argument: false)
+          if found[0] == :absorbed && template[0] != :union
+            absorb(template)
+            return
+          end
+
+          case template[0]
+          when :param
+            index = template[1]
+            bound = @bindings[index]
+            return if bound == :absorbed && found == [:hole]
+
+            if !bound || bound == :absorbed || (Slot.open?(bound, &@work) && !Slot.open?(found, &@work))
+              @bindings[index] = found
+            elsif !Slot.equivalent?(bound, found, &@work) && !Slot.open?(found, &@work)
+              @conflicts[index] = true
+            end
+          when :list
+            learn(template[1], found[1], type_argument: type_argument) if found[0] == :list
+          when :tuple
+            if found[0] == :tuple && template[1].length == found[1].length
+              template[1].zip(found[1]).each { |item, actual| learn(item, actual, type_argument: type_argument) }
+            end
+          when :map
+            if found[0] == :map
+              learn(template[1], found[1], type_argument: type_argument)
+              learn(template[2], found[2], type_argument: type_argument)
+            end
+          when :class
+            if found[0] == :class && template[1] == found[1] && template[2].length == found[2].length
+              template[2].zip(found[2]).each { |arg, actual| learn(arg, actual, type_argument: true) }
+            end
+          when :union
+            open, fixed = template[1].partition { |member| Slot.mentions_param?(member, &@work) }
+            return unless open.length == 1
+
+            if type_argument && found[0] != :absorbed
+              # A nested class solves its own parameters, without choosing the
+              # parent's argument union. Only type evidence crosses that boundary.
+              known = fixed.to_h { |member| [Slot.canonical(member, &@work), true] }
+              rest = (found[0] == :union ? found[1] : [found]).reject do |member|
+                known.key?(Slot.canonical(member, &@work))
+              end
+              found = rest.empty? ? [:absorbed] : Slot.union(rest, &@work)
+            end
+            if found[0] == :absorbed
+              absorb(open.first)
+            else
+              learn(open.first, found, type_argument: type_argument)
+            end
+          when :function
+            if found[0] == :function && template[1].length == found[1].length
+              template[1].zip(found[1]).each { |param, actual| learn(param[1], actual[1], type_argument: type_argument) }
+              learn(template[2], found[2], type_argument: type_argument)
+              learn(template[3], found[3], type_argument: type_argument)
+            end
+          end
+        end
+
+        def binding(index, inference: false)
+          bound = @bindings[index]
+          bound == :absorbed ? [inference ? :absorbed : :never] : bound
+        end
+
+        def conflict?(index)
+          @conflicts[index]
+        end
+
+        def apply(template)
+          bindings = @bindings.to_h { |index, _| [index, binding(index)] }
+          Slot.substitute(template, bindings, memo: @substitutions, &@work)
+        end
+
+        private
+
+        def absorb(template)
+          Slot.params(template, &@work).each do |param|
+            bound = @bindings[param[1]]
+            @bindings[param[1]] = :absorbed if !bound || bound == [:hole]
+          end
+        end
+      end
+
+      class Plan
+        # Ruby has no memo, and a step costs about 5 µs: use less fuel than Rust.
+        STEP_BUDGET = 1 << 20
+
+        def initialize(registry, budget: STEP_BUDGET)
+          @registry = registry
+          @remaining = budget
+          @work = ->(steps = 1) { spend(steps, @path || "value") }
+          @members = {}.compare_by_identity
+          @substitutions = {}.compare_by_identity
+          @normalized = {}.compare_by_identity
+        end
+
+        def plan_root(tree, slot)
+          planned = plan(tree, slot)
+          if !%i[handle host_object].include?(planned.kind) && Slot.open?(planned.ty, &@work) && Slot.mentions_param?(slot, &@work)
+            name = Slot.params(slot, &@work).first[2]
+            raise UnboundTypeArgs, "#{tree.path}: could not infer a type for `#{name}`; pass the call's type arguments"
+          end
+          restate(planned, fill_type(planned.ty))
+        end
+
+        def plan(tree, slot)
+          @path = tree.path
+          plan_normalized(tree, Slot.stated_form(slot, @registry, memo: @normalized, &@work))
+        end
+
+        private
+
+        def plan_normalized(tree, slot)
+          @path = tree.path
+          spend(1, tree.path)
+          slot = Slot.unfold(slot, @registry, &@work)
+          return choose(tree, slot[1]) if slot[0] == :union
+          # Any Ruby object fills a host-value slot and comes back as itself.
+          return node(tree, [:opaque], kind: :host_object, value: tree.original) if slot[0] == :host_value && tree.kind != :null
+          return node(tree, [:opaque]) if tree.kind == :host_object
+          return handle(tree, slot) if tree.kind == :handle
+          if %i[unknown interface].include?(slot[0])
+            own = natural(tree)
+            return restate(own, fill_type(own.ty))
+          end
+
+          case slot[0]
+          when :param, :hole, :opaque
+            return natural(tree)
+          when :null
+            return node(tree, [:null]) if tree.kind == :null
+          when :int, :bigint, :float, :bool, :string, :bytes
+            if (fit = Rules.fit(tree.value, slot[0])) && scalar?(tree)
+              return node(tree, [slot[0]], kind: slot[0], value: fit[1])
+            end
+          when :literal
+            expected = slot.last
+            kind = Slot.literal_kind(slot)
+            if %i[int bigint string bool].include?(kind) && scalar?(tree) &&
+               (fit = Rules.fit(tree.value, kind)) && fit[1] == expected
+              return node(tree, [kind], kind: kind, value: fit[1])
+            end
+          when :enum, :enum_variant
+            if (tree.kind == :enum && tree.name == slot[1]) || tree.kind == :string
+              if @registry.enum_values(slot[1]).include?(tree.value)
+                refuse(tree, "variant does not match #{slot[2]}") if slot[0] == :enum_variant && tree.value != slot[2]
+                return node(tree, [:enum, slot[1]], kind: :enum)
+              end
+              refuse(tree, "unknown variant #{tree.value.inspect} of #{slot[1]}")
+            end
+          when :list
+            if tree.kind == :list
+              inner, found = solve_elements(tree.children, slot[1], tree.path)
+              return node(tree, [:list, inner], children: tree.children.map { |child| plan_normalized(child, inner) },
+                evidence: found && [:list, found])
+            end
+          when :tuple
+            if tree.kind == :list
+              unless tree.children.length == slot[1].length
+                refuse(tree, "expected a tuple of #{slot[1].length} item(s), got #{tree.children.length}")
+              end
+              children = tree.children.zip(slot[1]).map { |child, item| plan_normalized(child, item) }
+              return node(tree, slot, children: children) unless Slot.mentions_param?(slot, &@work)
+
+              # Positions share their type variables: in (T[], T[]), [[], [1]] is (int[], int[]).
+              first = children.map { |child| evidence(child) }
+              solved = Solution.new(work: @work, substitutions: @substitutions)
+              solved.learn(slot, [:tuple, first])
+              Slot.params(slot, &@work).uniq { |param| param[1] }.each do |param|
+                if solved.conflict?(param[1])
+                  raise TypeArgConflict, "#{tree.path}: the positions of this tuple disagree about its type argument `#{param[2]}`"
+                end
+              end
+              result = solved.apply(slot)
+              holes = Slot.params(result, &@work).to_h { |param| [param[1], [:hole]] }
+              items = Slot.stated_form(Slot.substitute(result, holes, memo: @substitutions, &@work), @registry, memo: @normalized, &@work)[1]
+              children = tree.children.zip(items).map { |child, item| plan_normalized(child, item) }
+              # Export what the tuple solved for positions its own values left open,
+              # so sibling tuples in a list agree; keep the rest, including :absorbed.
+              found = first.zip(children).map { |own, child| Slot.open?(own, &@work) ? child.ty : own }
+              return node(tree, [:tuple, children.map(&:ty)], children: children, evidence: [:tuple, found])
+            end
+          when :map
+            if tree.kind == :map
+              key_slot = Slot.mentions_param?(slot[1], &@work) ? [:string] : slot[1]
+              inner, found = solve_elements(tree.children.map(&:last), slot[2], tree.path)
+              entries = tree.children.map do |key, child|
+                [map_key(key, key_slot), plan_normalized(child, inner)]
+              end
+              return node(tree, [:map, key_slot, inner], children: entries, evidence: found && [:map, key_slot, found])
+            end
+          when :class
+            return instance(tree, slot) if tree.kind == :class && tree.name == slot[1]
+          when :function
+            if tree.kind == :callable
+              throws = Slot.mentions_param?(slot[3], &@work) ? [:unknown] : slot[3]
+              signature = [:function, slot[1], slot[2], throws]
+              holes = Slot.params(signature, &@work).to_h { |param| [param[1], [:hole]] }
+              return node(tree, Slot.substitute(signature, holes, &@work))
+            end
+          end
+          return node(tree, [:media, tree.name]) if tree.kind == :media && media_fits?(tree, slot)
+          refuse(tree, "cannot encode #{tree.kind} as #{slot.inspect}")
+        end
+
+        def spend(steps, path)
+          @remaining -= steps
+          raise Fault, "#{path}: encoding exceeds the planning-step budget" if @remaining.negative?
+        end
+
+        def scalar?(tree)
+          %i[int bigint float bool string bytes].include?(tree.kind)
+        end
+
+        def refuse(tree, message)
+          raise Refusal, "#{tree.path}: #{message}"
+        end
+
+        def node(tree, ty, kind: tree.kind, value: tree.value, children: nil, evidence: nil)
+          Node.new(kind: kind, ty: ty, value: value, children: children, path: tree.path, evidence: evidence)
+        end
+
+        # An opaque instance names its class and fits only that class or an open
+        # slot. A bare handle carries no class, so it fits any slot.
+        def handle(tree, slot)
+          return node(tree, [:opaque]) unless tree.name
+          return node(tree, handle_type(tree)) if handle_fit(tree, slot)
+
+          refuse(tree, "cannot encode #{tree.name} as #{slot.inspect}")
+        end
+
+        # :open for an open slot, :own for the instance's class with arguments
+        # that agree with any the slot fixes, otherwise nil.
+        def handle_fit(tree, slot)
+          return :open if %i[unknown interface param hole opaque].include?(slot[0])
+          return unless slot[0] == :class && slot[1] == tree.name
+
+          own = handle_type(tree)
+          return :own if own[0] == :opaque
+
+          wanted = slot[2] || []
+          return unless wanted.length == own[2].length
+
+          agree = wanted.zip(own[2]).all? do |want, have|
+            Slot.mentions_param?(want, &@work) || Slot.open?(want, &@work) || Slot.equivalent?(want, have, &@work)
+          end
+          agree ? :own : nil
+        end
+
+        # A generic instance states its class only once BAML has said its arguments.
+        def handle_type(tree)
+          params = @registry.class_type_params(tree.name)
+          return [:opaque] unless params.empty? || tree.type_args.length == params.length
+
+          [:class, tree.name, tree.type_args.map { |arg| Slot.stated_form(arg, @registry, memo: @normalized, &@work) }]
+        end
+
+        # Evidence follows the original arm choices, not the wire types rebuilt
+        # after solving a container. :absorbed is inference-only, never a wire type.
+        def evidence(node)
+          node.evidence || node.ty
+        end
+
+        def solve_elements(children, template, path)
+          return [template, nil] unless Slot.mentions_param?(template, &@work)
+
+          planned = children.map { |child| plan_normalized(child, template) }
+          spend(children.length, path)
+          found = join(planned, inference: true)
+          solved = Solution.new(work: @work, substitutions: @substitutions)
+          solved.learn(template, found)
+          result = solved.apply(template)
+          holes = Slot.params(result, &@work).to_h { |param| [param[1], [:hole]] }
+          [Slot.stated_form(Slot.substitute(result, holes, memo: @substitutions, &@work), @registry, memo: @normalized, &@work), found]
+        end
+
+        def instance(tree, slot = nil)
+          params = @registry.class_type_params(tree.name)
+          fields = @registry.encoding_fields(tree.name)
+          args = slot ? slot[2] : Array.new(params.length)
+          unless args.length == params.length
+            raise Fault, "#{tree.path}: wrong number of type arguments for #{tree.name}"
+          end
+          fixed = args.map { |arg| arg unless arg && (Slot.mentions_param?(arg, &@work) || Slot.open?(arg, &@work)) }
+          unless tree.type_args.empty?
+            own = tree.type_args.map { |arg| Slot.stated_form(arg, @registry, memo: @normalized, &@work) }
+            unless own.length == params.length && own.zip(fixed).all? { |arg, known| !known || Slot.equivalent?(arg, known, &@work) }
+              refuse(tree, "instance type arguments do not match #{slot.inspect}")
+            end
+            fixed = own
+          end
+          unless fixed.all?
+            solved = Solution.new(work: @work, substitutions: @substitutions)
+            tree.children.each do |name, child|
+              template = Slot.stated_form(Slot.substitute(fields.fetch(name)[1], fixed, memo: @substitutions, &@work), @registry, memo: @normalized, &@work)
+              planned = plan_normalized(child, template)
+              solved.learn(template, evidence(planned))
+            end
+            fixed = fixed.each_with_index.map do |known, index|
+              next known if known
+              if solved.conflict?(index)
+                raise TypeArgConflict, "#{tree.path}: the fields of this #{tree.name} disagree about its type argument `#{params[index]}`"
+              end
+              found = solved.binding(index)
+              unless found && !Slot.open?(found, &@work)
+                raise MissingTypeArgs, "#{tree.path}: the fields of this #{tree.name} do not determine its type arguments; use Baml.bind_types(instance, ...)"
+              end
+              found
+            end
+            if slot && Slot.mentions_param?(slot, &@work)
+              inferred = fixed.each_index.map { |index| solved.binding(index, inference: true) || fixed[index] }
+            end
+          end
+          children = tree.children.map do |name, child|
+            template = Slot.stated_form(Slot.substitute(fields.fetch(name)[1], fixed, memo: @substitutions, &@work), @registry, memo: @normalized, &@work)
+            [name, plan_normalized(child, template)]
+          end
+          node(tree, [:class, tree.name, fixed], children: children, evidence: inferred && [:class, tree.name, inferred])
+        end
+
+        def natural(tree)
+          spend(1, tree.path)
+          case tree.kind
+          when :null, :int, :bigint, :float, :bool, :string, :bytes
+            node(tree, [tree.kind])
+          when :media then node(tree, [:media, tree.name])
+          when :enum
+            unless @registry.enum_values(tree.name).include?(tree.value)
+              refuse(tree, "unknown variant #{tree.value.inspect} of #{tree.name}")
+            end
+            node(tree, [:enum, tree.name])
+          when :class then instance(tree)
+          when :callable
+            raise UntypedCallable, "#{tree.path}: cannot encode an untyped callable; it needs a function slot"
+          when :host_object then node(tree, [:opaque])
+          when :handle then node(tree, tree.name ? handle_type(tree) : [:opaque])
+          when :list
+            # A tuple BAML returned goes back as that tuple; any other Array is a list.
+            return plan(tree, tree.carried) if tree.carried
+
+            children = tree.children.map { |child| natural(child) }
+            spend(children.length, tree.path)
+            inner = join(children)
+            node(tree, [:list, inner], children: children)
+          when :map
+            children = tree.children.map do |key, child|
+              [map_key(key, [:string]), natural(child)]
+            end
+            spend(children.length, tree.path)
+            values = children.map(&:last)
+            inner = join(values)
+            node(tree, [:map, [:string], inner], children: children.map(&:first).zip(values))
+          else refuse(tree, "cannot encode #{tree.value.class}: it has no BAML type")
+          end
+        end
+
+        def map_key(key, slot)
+          unless %i[string bytes].include?(key.kind)
+            refuse(key, "map keys must be string")
+          end
+          planned = plan_normalized(key, slot)
+          refuse(key, "map keys must be string") unless planned.kind == :string
+          planned.value
+        end
+
+        def media_fits?(tree, slot)
+          kind = if slot[0] == :media
+                   slot[1]
+                 elsif slot[0] == :class && (slot[2] || []).empty?
+                   @registry.class_crossing(slot[1]).to_s.delete_prefix("media_").to_sym
+                 end
+          kind == :generic || kind == tree.name
+        end
+
+        def rank(tree, slot)
+          slot = Slot.unfold(slot, @registry, &@work)
+          return 0 if tree.kind == :media && media_fits?(tree, slot)
+          return 0 if tree.kind == :enum && %i[enum enum_variant].include?(slot[0]) && tree.name == slot[1]
+          return 2 if slot[0] == :host_value && tree.kind != :null
+          if tree.kind == :handle
+            return 2 unless tree.name
+
+            return { open: 2, own: 0 }[handle_fit(tree, slot)]
+          end
+          return 2 if %i[unknown interface param hole opaque].include?(slot[0]) || tree.kind == :host_object
+          return 1 if tree.kind == :callable && slot[0] == :function
+          return 0 if tree.kind == :null && slot[0] == :null
+          return 0 if %i[class enum].include?(tree.kind) && tree.kind == slot[0] && tree.name == slot[1]
+          # A fixed arity is more specific than a list: try the tuple arm first.
+          return 0 if tree.kind == :list && slot[0] == :tuple && tree.children.length == slot[1].length
+          return 1 if %i[list map].include?(tree.kind) && tree.kind == slot[0]
+          return 3 if tree.kind == :string && %i[enum enum_variant].include?(slot[0])
+          return unless scalar?(tree)
+
+          kind = slot[0] == :literal ? Slot.literal_kind(slot) : slot[0]
+          fit = Rules.fit(tree.value, kind)
+          fit && (fit[0] == :as_is ? 0 : 3)
+        end
+
+        def choose(tree, members)
+          spend(1, tree.path)
+          members = @members[members] ||= Slot.union(Slot.members(members, @registry, &@work), &@work)
+          return plan_normalized(tree, members) unless members[0] == :union
+
+          inferring = Slot.mentions_param?(members, &@work)
+          ranked = members[1].filter_map do |member|
+            priority = rank(tree, member)
+            [priority, member] if priority
+          end.group_by(&:first).sort
+          failures = []
+          ranked.each do |_, group|
+            fits = []
+            group.each do |_, member|
+              begin
+                candidate = plan_normalized(tree, member)
+                candidate.evidence = [:absorbed] if inferring && !Slot.mentions_param?(member, &@work)
+                seen = fits.find { |fit| Slot.equivalent?(fit.ty, candidate.ty, &@work) }
+                if !seen
+                  fits << candidate
+                elsif candidate.evidence == [:absorbed]
+                  # Equivalent fixed arms win inference ties; keep the first plan's wire spelling and order.
+                  seen.evidence = candidate.evidence
+                end
+              rescue Fault
+                raise
+              rescue Refusal => error
+                failures << error
+              end
+            end
+            next if fits.empty?
+            return fits.first if fits.length == 1
+
+            own = begin
+              natural(tree).ty
+            rescue Fault
+              raise
+            rescue Refusal
+              nil
+            end
+            preferred = fits.find { |candidate| own && Slot.equivalent?(candidate.ty, own, &@work) }
+            return preferred if preferred
+
+            raise Ambiguous, "#{tree.path}: fits more than one union member"
+          end
+          raise failures.first if failures.length == 1
+
+          refuse(tree, "cannot encode #{tree.kind}: no union member fits")
+        end
+
+        # Only holes borrow a sibling's wire type. Inference also skips absorbed
+        # evidence, including inside containers and class arguments. Closed
+        # containers keep their types: [[1], ["a"]] is (int[] | string[])[],
+        # not (int | string)[][].
+        def join(nodes, inference: false)
+          if inference
+            nodes = nodes.map { |child| child.dup.tap { |copy| copy.ty = evidence(child) } }
+            contributing = nodes.reject { |child| child.ty[0] == :absorbed }
+            return [:absorbed] if !nodes.empty? && contributing.empty?
+
+            # Absorbed evidence can borrow a concrete type, but holes must borrow
+            # absorbed evidence, never erase it. Visit the latter before holes.
+            priorities = {}.compare_by_identity
+            groups = contributing.group_by { |child| priorities[child.ty] ||= evidence_priority(child.ty) }
+            nodes = groups.values_at(0, 1, 2).compact.flatten(1)
+          end
+          open = ->(ty) { inference ? priorities.fetch(ty).positive? : Slot.open?(ty, &@work) }
+          distinct = {}
+          add = ->(ty) { distinct[Slot.canonical(ty, &@work)] ||= ty }
+          nodes.each { |child| add.call(child.ty) unless open.call(child.ty) }
+          nodes.map! do |child|
+            if open.call(child.ty)
+              target = distinct.each_value.find { |ty| fills?(child.ty, ty, inference: inference) }
+              if target
+                inference ? child.ty = target : child = restate(child, target)
+              else
+                add.call(child.ty)
+              end
+            end
+            child
+          end
+          distinct.empty? ? [:hole] : Slot.union(distinct.values, &@work)
+        end
+
+        def evidence_priority(ty)
+          return 2 if %i[hole opaque].include?(ty[0])
+          return 1 if ty[0] == :absorbed
+
+          @work.call(1)
+          Slot.children(ty).reduce(0) { |priority, child| [priority, evidence_priority(child)].max }
+        end
+
+        def fills?(own, target, inference: false)
+          return true if own[0] == :hole
+          return target[0] != :hole if inference && own[0] == :absorbed
+          return false if own[0] == :opaque || own[0] != target[0]
+
+          case own[0]
+          when :list then fills?(own[1], target[1], inference: inference)
+          when :map then fills?(own[1], target[1], inference: inference) && fills?(own[2], target[2], inference: inference)
+          when :class
+            if inference && own[1] == target[1] && own[2].length == target[2].length
+              own[2].zip(target[2]).all? { |arg, actual| fills?(arg, actual, inference: true) }
+            else
+              Slot.equivalent?(own, target, &@work)
+            end
+          when :tuple
+            own[1].length == target[1].length &&
+              own[1].zip(target[1]).all? { |item, actual| fills?(item, actual, inference: inference) }
+          else Slot.equivalent?(own, target, &@work)
+          end
+        end
+
+        def fill_type(ty)
+          case ty[0]
+          when :hole, :opaque then [:unknown]
+          when :list then [:list, fill_type(ty[1])]
+          when :map then [:map, fill_type(ty[1]), fill_type(ty[2])]
+          when :tuple then [:tuple, ty[1].map { |item| fill_type(item) }]
+          when :union
+            members = ty[1].map { |item| fill_type(item) }
+            members.include?([:unknown]) ? [:unknown] : Slot.union(members, &@work)
+          else ty
+          end
+        end
+
+        def restate(node, target)
+          return node unless Slot.open?(node.ty, &@work)
+
+          ty = if fills?(node.ty, target)
+                 target
+               elsif target[0] == :union && (member = target[1].find { |item| fills?(node.ty, item) })
+                 member
+               else
+                 fill_type(node.ty)
+               end
+          children = case node.kind
+                     when :list
+                       if ty[0] == :tuple
+                         node.children.zip(ty[1]).map { |child, item| restate(child, item) }
+                       else
+                         node.children.map { |child| restate(child, ty[1]) }
+                       end
+                     when :map then node.children.map { |key, child| [key, restate(child, ty[2])] }
+                     else return node
+                     end
+          Node.new(kind: node.kind, ty: ty, value: node.value, children: children, path: node.path, evidence: node.evidence)
+        end
+      end
+    end
+  end
+end
