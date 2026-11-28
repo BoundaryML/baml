@@ -23,7 +23,7 @@ pub(crate) struct OutputArgs {
         long = "output-format",
         value_enum,
         value_name = "FORMAT",
-        help = "What goes to stdout [default: text] [possible values: text, json, jsonl]",
+        help = "What goes to stdout [default: text] [possible values: text, json, jsonl, json-envelope (run only)]",
         hide_default_value = true,
         hide_possible_values = true,
         default_value_t = OutputFormat::Text,

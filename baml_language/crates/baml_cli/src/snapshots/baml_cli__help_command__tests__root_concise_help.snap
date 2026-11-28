@@ -33,7 +33,7 @@ Global options:
       --project-dir <PATH>          Discover the BAML project from this path
   -q, --quiet                       Print no status or progress on stderr
       --output-format <FORMAT>      What goes to stdout [default: text] [possible values: text,
-                                    json, jsonl]
+                                    json, jsonl, json-envelope (run only)]
       --color <WHEN>                Control ANSI colors [possible values: auto, always, never]
       --output-preset <PRESET>      Select output defaults [default: auto] [possible values: auto,
                                     human, agent]

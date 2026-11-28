@@ -334,7 +334,7 @@ fn build_target_command_with_name(
             .long("output-format")
             .value_name("FORMAT")
             .value_parser(clap::value_parser!(crate::OutputFormat))
-            .help("Format the returned value [default: text]"),
+            .help("Format the returned value (json-envelope includes reported token usage)"),
     );
 
     // List non-primitive parameters in an `after_help` block so users

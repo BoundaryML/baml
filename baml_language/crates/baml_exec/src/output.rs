@@ -1,17 +1,17 @@
 // Output formatting for `BexExternalValue` — shared by `baml run` and
 // packaged binaries produced by `baml pack`.
 //
-// Two formats, chosen at run time with `--output-format` by both `baml run`
-// and packed binaries:
+// Formats selected at run time with `--output-format`:
 //   - Text: human-readable, with type annotations. The default.
 //   - Json: single JSON document, no wrapping; for pipelines, CI and agents.
+//   - JsonEnvelope: the return value and model usage, if complete.
 
 #![allow(clippy::print_stdout)]
 
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use bex_engine::{BexCallArg, BexEngine, BexExternalValue};
+use bex_engine::{BexCallArg, BexEngine, BexExternalValue, ModelUsage};
 
 use crate::HelperCallContext;
 
@@ -23,6 +23,8 @@ pub enum OutputFormat {
     Text,
     /// Single JSON document with no wrapping noise.
     Json,
+    /// JSON object with the return value and reported token usage by model.
+    JsonEnvelope,
 }
 
 /// Write a target's return value while preserving logger/cancellation context
@@ -35,6 +37,7 @@ pub async fn write_output_with_context(
     engine: &Arc<BexEngine>,
     value: BexExternalValue,
     format: OutputFormat,
+    usage: Option<&[ModelUsage]>,
     helper_context: &HelperCallContext,
     before_print: impl FnOnce(),
 ) -> Result<()> {
@@ -51,8 +54,31 @@ pub async fn write_output_with_context(
             println!("{}", format_value(&value));
             Ok(())
         }
-        OutputFormat::Json => {
-            let text = serialize_via_baml_json(engine, value, helper_context).await?;
+        OutputFormat::Json | OutputFormat::JsonEnvelope => {
+            let mut text = serialize_via_baml_json(engine, value, helper_context).await?;
+            if format == OutputFormat::JsonEnvelope {
+                let usage = usage.map(|entries| {
+                    entries
+                        .iter()
+                        .map(|entry| {
+                            serde_json::json!({
+                                "provider": entry.provider,
+                                "model": entry.model,
+                                "calls": entry.calls,
+                                "input_tokens": entry.input_tokens,
+                                "output_tokens": entry.output_tokens,
+                                "cache_read_tokens": entry.cache_read_tokens,
+                                "cache_write_tokens": entry.cache_write_tokens,
+                                "reasoning_tokens": entry.reasoning_tokens,
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                });
+                // BAML already produced JSON. Embed it directly to preserve
+                // values deeper than serde_json's parser can read.
+                let usage = serde_json::to_string(&usage)?;
+                text = format!(r#"{{"value":{text},"usage":{usage}}}"#);
+            }
             before_print();
             println!("{text}");
             Ok(())

@@ -268,6 +268,7 @@ impl BexEngine {
                 .or_else(|| inherited.and_then(|state| state.ancestry.clone())),
             host_environment: inherited.map_or(0, |state| state.host_environment),
             hook_suppression: inherited.is_some_and(|state| state.hook_suppression),
+            model_usage_collector: inherited.and_then(|state| state.model_usage_collector.clone()),
         };
         Ok(HostInvocation {
             state,

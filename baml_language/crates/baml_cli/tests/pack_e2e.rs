@@ -24,8 +24,9 @@
 mod common;
 
 use std::{
+    io::{BufRead as _, BufReader, Write as _},
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::{Command, Output, Stdio},
 };
 
 use common::BuiltPaths;
@@ -107,6 +108,164 @@ fn pack_project(
 // ============================================================================
 // Tests
 // ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn json_envelope_reports_model_usage_for_run_and_pack() {
+    use std::{
+        sync::{Mutex, mpsc},
+        time::Duration,
+    };
+
+    use serde_json::{Value, json};
+    use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::path};
+
+    let built = common::ensure_built();
+    let server = MockServer::start().await;
+    let answer = json!({
+        "model": "reported-model",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}],
+    });
+    let mut with_usage = answer.clone();
+    with_usage["usage"] = json!({"prompt_tokens": 4111, "completion_tokens": 4222});
+    Mock::given(path("/metered/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(with_usage.clone()))
+        .expect(6)
+        .mount(&server)
+        .await;
+    Mock::given(path("/unmetered/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(answer))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let (release_response, response_gate) = mpsc::channel();
+    let response_gate = Mutex::new(response_gate);
+    Mock::given(path("/background/chat/completions"))
+        .respond_with(move |_: &Request| {
+            response_gate
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(30))
+                .unwrap();
+            ResponseTemplate::new(200).set_body_json(&with_usage)
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let source = format!(
+        r#"
+function Metered(x: string) -> string {{
+    client: openai.GenericClient.new(model = "requested-model", base_url = "{uri}/metered", api_key = "test", capture_wire = false)
+    prompt: `Echo ${{x}}`
+}}
+
+function Unmetered(x: string) -> string {{
+    client: openai.GenericClient.new(model = "requested-model", base_url = "{uri}/unmetered", api_key = "test", capture_wire = false)
+    prompt: `Echo ${{x}}`
+}}
+
+function Twice(x: string) -> string {{
+    let pending = spawn {{ Metered(x) }};
+    let _ = Metered(x);
+    await pending
+}}
+
+function BackgroundModel(x: string) -> string {{
+    client: openai.GenericClient.new(model = "requested-model", base_url = "{uri}/background", api_key = "test", capture_wire = false)
+    prompt: `Echo ${{x}}`
+}}
+
+function Background(x: string) -> string {{
+    let value = Metered(x);
+    let _ = spawn {{ BackgroundModel(x) }};
+    value
+}}
+"#,
+        uri = server.uri()
+    );
+    let (project, binary) = pack_project(built, &source, &["Metered"]);
+
+    let spawn = |cmd: &mut Command| {
+        let mut child = cmd
+            .args(["--json-args", "-"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(br#"{"x":"hi"}"#)
+            .unwrap();
+        child
+    };
+    let invoke = |cmd: &mut Command| -> Value {
+        let child = spawn(cmd);
+        let result = child.wait_with_output().unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        serde_json::from_slice(&result.stdout).unwrap()
+    };
+
+    let run_command = |target: &str, format: &str| {
+        let mut cmd = command(&built.baml_cli);
+        cmd.current_dir(project.path())
+            .env("BAML_HOME", common::shared_baml_home())
+            .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+            .env("BAML_TELEMETRY", "off")
+            .args(["run", "--output-format", format, "-f", target, "--", target]);
+        cmd
+    };
+    let run = |target, format| invoke(&mut run_command(target, format));
+    let expected = |calls: u64| {
+        json!({
+            "value": "ok",
+            "usage": [{
+                "provider": "openai-generic",
+                "model": "reported-model",
+                "calls": calls,
+                "input_tokens": 4111 * calls,
+                "output_tokens": 4222 * calls,
+                "cache_read_tokens": null,
+                "cache_write_tokens": null,
+                "reasoning_tokens": null,
+            }],
+        })
+    };
+    assert_eq!(run("Metered", "json"), json!("ok"));
+    assert_eq!(run("Metered", "json-envelope"), expected(1));
+    assert_eq!(run("Twice", "json-envelope"), expected(2));
+    assert_eq!(
+        run("Unmetered", "json-envelope"),
+        json!({"value": "ok", "usage": []})
+    );
+    assert_eq!(
+        invoke(&mut command(&binary).args(["--output-format", "json-envelope"])),
+        expected(1),
+    );
+
+    // Hold the background model's response until the CLI has emitted the envelope.
+    let mut child = spawn(&mut run_command("Background", "json-envelope"));
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    stdout.read_line(&mut line).unwrap();
+    release_response.send(()).unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        serde_json::from_str::<Value>(&line).unwrap(),
+        json!({"value": "ok", "usage": null})
+    );
+}
 
 /// The application has one version regardless of transport. Exercise source
 /// execution (including a warm cache), a real packed host, and generated SDK

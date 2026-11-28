@@ -81,7 +81,8 @@ Global options:
           Print no status or progress on stderr
 
       --output-format <FORMAT>
-          What goes to stdout [default: text] [possible values: text, json, jsonl]
+          What goes to stdout [default: text] [possible values: text, json, jsonl, json-envelope
+          (run only)]
 
       --color <WHEN>
           Control ANSI colors [possible values: auto, always, never]

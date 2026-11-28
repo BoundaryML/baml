@@ -27,6 +27,8 @@ pub(crate) enum OutputFormat {
     Json,
     /// One JSON item per line; only for commands whose result is a sequence.
     Jsonl,
+    /// The return value and reported token usage; only for named `run` targets.
+    JsonEnvelope,
 }
 
 impl From<baml_exec::OutputFormat> for OutputFormat {
@@ -34,6 +36,7 @@ impl From<baml_exec::OutputFormat> for OutputFormat {
         match format {
             baml_exec::OutputFormat::Text => Self::Text,
             baml_exec::OutputFormat::Json => Self::Json,
+            baml_exec::OutputFormat::JsonEnvelope => Self::JsonEnvelope,
         }
     }
 }
@@ -173,6 +176,9 @@ pub(crate) fn write<T: Report>(format: OutputFormat, value: &T) -> anyhow::Resul
         OutputFormat::Jsonl => {
             serde_json::to_writer(&mut out, value)?;
             writeln!(out)?;
+        }
+        OutputFormat::JsonEnvelope => {
+            anyhow::bail!("`--output-format json-envelope` is only supported by `run`");
         }
     }
     out.flush()?;

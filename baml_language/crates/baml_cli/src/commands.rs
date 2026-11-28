@@ -312,6 +312,11 @@ impl RuntimeCli {
         // Resolve every output dial once, before any subcommand writes.
         crate::output::init(self.output)?;
         let cx = crate::output::context(self.output.format, self.global.project_dir.clone());
+        if cx.format == crate::output::OutputFormat::JsonEnvelope
+            && !matches!(self.command, Commands::Run(_))
+        {
+            crate::usage_bail!("`--output-format json-envelope` is only supported by `run`");
+        }
 
         if self.command.requires_agent_skill() {
             crate::skill_check::check(cx.project_dir.as_deref())?;
@@ -758,7 +763,7 @@ mod tests {
             (
                 &["run"],
                 &[
-                    "--output-format <FORMAT>\n          What goes to stdout [default: text] [possible values: text, json, jsonl]",
+                    "--output-format <FORMAT>\n          What goes to stdout [default: text] [possible values: text, json, jsonl, json-envelope\n          (run only)]",
                     "--color <WHEN>\n          Control ANSI colors [possible values: auto, always, never]",
                     "--output-preset <PRESET>\n          Select output defaults [default: auto] [possible values: auto, human, agent]",
                     "--hyperlinks <WHEN>\n          Control terminal hyperlinks [possible values: auto, always, never]",

@@ -181,6 +181,10 @@ pub(crate) const ENTRY_POINT: &str = "main";
 #[command(after_long_help = "\
 Use `baml run <target> -- --help` to display the target's generated arguments.
 
+Use `--output-format json-envelope` to include reported token usage with a
+named function's JSON result. Usage is summed by provider and model.
+The `usage` field is null if child tasks are still running when the function returns.
+
 Examples:
   Run a function:
     baml run main -- --name Ada
@@ -369,7 +373,7 @@ impl RunArgs {
     fn log_output(&self, format: OutputFormat) -> LogOutput {
         match format {
             OutputFormat::Text => LogOutput::passthrough(self.log, "run"),
-            OutputFormat::Json => LogOutput::status(self.log, "run"),
+            OutputFormat::Json | OutputFormat::JsonEnvelope => LogOutput::status(self.log, "run"),
         }
     }
 
@@ -420,6 +424,7 @@ impl RawCommand for RunArgs {
             crate::output::OutputFormat::Json | crate::output::OutputFormat::Jsonl => {
                 OutputFormat::Json
             }
+            crate::output::OutputFormat::JsonEnvelope => OutputFormat::JsonEnvelope,
         };
         args.run_with_reporter(&Reporter::new())
     }
@@ -427,6 +432,11 @@ impl RawCommand for RunArgs {
 
 impl RunArgs {
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
+        if self.output_format == OutputFormat::JsonEnvelope
+            && (self.expression.is_some() || self.list)
+        {
+            crate::usage_bail!("`--output-format json-envelope` requires a named function target");
+        }
         if self.hot {
             // Before anything compiles: no caller may look through a function
             // a save can replace.
@@ -1236,6 +1246,7 @@ impl RunArgs {
                         &engine,
                         value,
                         output_format,
+                        None,
                         &helper_context,
                         || log_output.print(logs.as_ref()),
                     )
