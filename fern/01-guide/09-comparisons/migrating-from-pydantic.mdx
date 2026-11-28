@@ -1,0 +1,42 @@
+---
+title: Migrating from Pydantic or Instructor
+subtitle: Learn how to convert Pydantic models into BAML source
+---
+
+If an application already uses Pydantic models with Instructor or another structured-output
+library, `baml import` can turn those models into reviewable BAML source.
+
+## Import your models
+
+Run the command from the BAML project root using the same Python environment as the application:
+
+```bash
+baml import --from pydantic path/to/models.py --out baml_src/imported_models.baml
+```
+
+The importer finds the `BaseModel` subclasses declared in that file, including schemas referenced
+through nested models. It emits BAML classes and enums while preserving renamed JSON properties
+with `@alias`.
+
+You can also export JSON Schema yourself and import that directly:
+
+```bash
+python -c 'import json; from models import Resume; print(json.dumps(Resume.model_json_schema()))' > resume.schema.json
+baml import --from jsonschema resume.schema.json --out baml_src/resume.baml
+```
+
+## Validate and adopt the result
+
+Run `baml check` after import:
+
+```bash
+baml check
+```
+
+Review the generated types before committing them. JSON Schema can express constraints that do not
+have direct BAML equivalents, so numeric ranges, regular expressions, and custom validators are
+not copied. Once the types look right, use them as function inputs and outputs and run
+`baml generate` as usual.
+
+Re-running the import command replaces the selected output file. Keep hand-written changes in a
+different `.baml` file if the upstream Pydantic schema will be imported repeatedly.
