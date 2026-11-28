@@ -16,6 +16,7 @@
 //! table under the lambda's scope. Constructs the engine does not handle
 //! yet still record the `Error` sentinel and upgrade slice by slice.
 
+mod coverage;
 pub(crate) mod flow;
 mod frames;
 pub(crate) mod obligations;
@@ -961,9 +962,53 @@ enum ConstructorMiss {
     /// The head is a type parameter or a scoped `type` binding: it shadows
     /// every item and denotes no class to construct.
     TypeParameter,
-    /// The head is an alias of a type no object literal can construct:
-    /// already reported precisely.
+    /// The head is an alias of a type no object literal can construct, or
+    /// a builtin's companion class: already reported precisely.
     Reported,
+}
+
+/// What a written class head denotes ([`InferenceContext::resolve_class_head`]).
+enum ClassHead<'db> {
+    /// A class, at the instantiation an alias pins (`None` when the head
+    /// names the class itself and the arguments are the site's own).
+    Class {
+        class: ClassRef<'db>,
+        pinned: Option<Vec<Ty>>,
+    },
+    /// A source interface named directly.
+    Interface(baml_compiler2_hir::loc::InterfaceLoc<'db>),
+    /// An interface a served dependency exports.
+    ExportedInterface,
+}
+
+/// Why a written class head denotes no class or interface.
+enum ClassHeadMiss {
+    /// The head resolves to nothing.
+    Unresolved,
+    /// The head is a type parameter or a scoped `type` binding.
+    TypeParameter,
+    /// The head names an item that is neither a class, an interface nor an
+    /// alias (an enum).
+    NotAClass,
+    /// The head is an alias of something other than a class.
+    Alias(Box<AliasNotOfClass>),
+    /// The head names a builtin's companion class (`baml.Int`): it denotes
+    /// the builtin (`int`), not a class with fields.
+    Companion(Box<CompanionHead>),
+}
+
+/// A head naming a builtin's companion class.
+struct CompanionHead {
+    class_name: baml_type::DeclName,
+    companion: baml_type::type_kind::BuiltinCompanion,
+}
+
+/// An alias head that denotes no class.
+struct AliasNotOfClass {
+    /// The alias's value as declared.
+    denotes: baml_type::Ty,
+    /// What its chain expands to (`None` for a cyclic chain).
+    target: Option<baml_type::Ty>,
 }
 
 /// S17 pending diagnostic (engine-internal): arena-anchored, payload
@@ -1506,6 +1551,17 @@ enum PendingDiag<'db> {
     },
     RestNotBinding {
         pat: PatId,
+    },
+    PatternHeadNotDestructurable {
+        pat: PatId,
+        name: baml_type::Name,
+        reason: crate::diagnostics::NotDestructurableReason,
+    },
+    /// A destructure through an alias that writes type arguments.
+    PatternAliasTakesNoTypeArgs {
+        pat: PatId,
+        name: baml_type::Name,
+        got: usize,
     },
     UnresolvedPatternName {
         pat: PatId,
@@ -2369,6 +2425,9 @@ struct InferenceContext<'db> {
     /// unit values carries its branches'. [`Self::join_units`] reports one
     /// that joins any other value.
     unjudged_units: FxHashMap<ExprId, Vec<UnitSite>>,
+    /// What each typed pattern wrote, as typing resolved it: the input of
+    /// coverage lowering (`coverage::HirPatCtx::coverage_dpat`).
+    pattern_heads: FxHashMap<PatId, coverage::PatternHead>,
     /// The file whose body this context infers: the viewer every visibility
     /// question is asked from, and the home of package-scoped lookups (the
     /// overlap oracle's alias map enumerates its package plus the
@@ -2440,6 +2499,7 @@ impl<'db> InferenceContext<'db> {
             unit_positions: FxHashMap::default(),
             spread_sites: FxHashMap::default(),
             unjudged_units: FxHashMap::default(),
+            pattern_heads: FxHashMap::default(),
             owner_file,
             overlap_aliases: std::cell::OnceCell::new(),
             wf_scope_env: std::cell::OnceCell::new(),
@@ -9889,92 +9949,155 @@ impl<'db> InferenceContext<'db> {
         object: ExprId,
         type_name: &baml_base::Path,
     ) -> Result<(ClassRef<'db>, Option<Vec<Ty>>), ConstructorMiss> {
+        let head = self
+            .lower
+            .type_path_head(type_name.origin(), type_name.segments());
+        let resolved = self.resolve_class_head(head, type_name.segments());
+        let short = baml_type::Name::new(type_name.leaf().as_str());
+        // An alias takes no arguments of its own: written ones are an arity
+        // error, and the class's come from the alias's definition.
+        if matches!(
+            resolved,
+            Ok(ClassHead::Class {
+                pinned: Some(_),
+                ..
+            }) | Err(ClassHeadMiss::Alias(_))
+        ) {
+            let written = self
+                .type_refs
+                .expr_type_args
+                .get(&object)
+                .map_or(0, |args| args.len());
+            if written > 0 {
+                self.report(PendingDiag::AliasTakesNoTypeArgs {
+                    expr: object,
+                    name: short.clone(),
+                    got: written,
+                });
+            }
+        }
+        match resolved {
+            Ok(ClassHead::Class { class, pinned }) => Ok((class, pinned)),
+            // No object literal builds an interface.
+            Ok(ClassHead::Interface(_) | ClassHead::ExportedInterface)
+            | Err(ClassHeadMiss::Unresolved | ClassHeadMiss::NotAClass) => {
+                Err(ConstructorMiss::Unresolved)
+            }
+            Err(ClassHeadMiss::TypeParameter) => Err(ConstructorMiss::TypeParameter),
+            Err(ClassHeadMiss::Companion(companion)) => {
+                let CompanionHead {
+                    class_name,
+                    companion,
+                } = *companion;
+                self.report(PendingDiag::CannotConstructBuiltinCompanion {
+                    expr: object,
+                    class_name,
+                    companion,
+                });
+                Err(ConstructorMiss::Reported)
+            }
+            Err(ClassHeadMiss::Alias(alias)) => {
+                self.report(PendingDiag::AliasNotConstructible {
+                    expr: object,
+                    name: short,
+                    denotes: alias.denotes,
+                });
+                Err(ConstructorMiss::Reported)
+            }
+        }
+    }
+
+    /// What a written class head (`Foo` in a class literal `Foo { .. }` or a
+    /// destructure `Foo { .. }`) denotes, wherever it is declared. An alias
+    /// (or a chain of them) of a class denotes that class at the arguments
+    /// the alias pins. A scoped type parameter or a lexical generic
+    /// parameter shadows every item and denotes nothing.
+    fn resolve_class_head(
+        &self,
+        head: PathHead,
+        segments: &[baml_type::Name],
+    ) -> Result<ClassHead<'db>, ClassHeadMiss> {
         use baml_compiler2_hir::contributions::Definition;
 
         use crate::{lower::ResolvedTypeDefinition, package_interface::ExportedType};
 
-        let head = self
-            .lower
-            .type_path_head(type_name.origin(), type_name.segments());
-        if self.scoped_type_param_heads(head, type_name.segments()) {
-            return Err(ConstructorMiss::TypeParameter);
+        if self.scoped_type_param_heads(head, segments) {
+            return Err(ClassHeadMiss::TypeParameter);
         }
         let db = self.db;
-        let alias_value = match self.lower.resolve_type(head, type_name.segments()) {
-            None => return Err(ConstructorMiss::Unresolved),
+        let alias_value = match self.lower.resolve_type(head, segments) {
+            None => return Err(ClassHeadMiss::Unresolved),
             Some(ResolvedTypeDefinition::Source(Definition::Class(class))) => {
-                return Ok((DeclRef::Source(class), None));
+                return self.class_head(DeclRef::Source(class), None);
+            }
+            Some(ResolvedTypeDefinition::Source(Definition::Interface(interface))) => {
+                return Ok(ClassHead::Interface(interface));
             }
             Some(ResolvedTypeDefinition::Source(Definition::TypeAlias(alias))) => {
                 crate::lower::type_alias_value(db, alias)
             }
-            Some(ResolvedTypeDefinition::Source(_)) => return Err(ConstructorMiss::Unresolved),
+            Some(ResolvedTypeDefinition::Source(_)) => return Err(ClassHeadMiss::NotAClass),
             Some(ResolvedTypeDefinition::Exported(exported)) => match exported.as_ref() {
                 ExportedType::Class { qtn, .. } => {
-                    return mounted_class_loc(db, qtn)
-                        .map(|class| (DeclRef::External(class), None))
-                        .ok_or(ConstructorMiss::Unresolved);
+                    let class = mounted_class_loc(db, qtn).ok_or(ClassHeadMiss::Unresolved)?;
+                    return self.class_head(DeclRef::External(class), None);
                 }
+                ExportedType::Interface { .. } => return Ok(ClassHead::ExportedInterface),
                 ExportedType::TypeAlias { resolved, .. } => resolved.clone(),
-                ExportedType::Enum { .. } | ExportedType::Interface { .. } => {
-                    return Err(ConstructorMiss::Unresolved);
-                }
+                ExportedType::Enum { .. } => return Err(ClassHeadMiss::NotAClass),
             },
         };
-        let short = baml_type::Name::new(type_name.leaf().as_str());
-        // An alias takes no arguments of its own: written ones are an arity
-        // error, and the class's come from the alias's definition.
-        let written = self
-            .type_refs
-            .expr_type_args
-            .get(&object)
-            .map_or(0, |args| args.len());
-        if written > 0 {
-            self.report(PendingDiag::AliasTakesNoTypeArgs {
-                expr: object,
-                name: short.clone(),
-                got: written,
-            });
-        }
-        let Some((head, args)) = self.class_denoted_by(alias_value.clone()) else {
-            self.report(PendingDiag::AliasNotConstructible {
-                expr: object,
-                name: short,
+        let target = self.alias_target(alias_value.clone());
+        let Some(baml_type::Ty::Class(class_head, args)) = target else {
+            return Err(ClassHeadMiss::Alias(Box::new(AliasNotOfClass {
                 denotes: alias_value,
-            });
-            return Err(ConstructorMiss::Reported);
+                target,
+            })));
         };
         let pinned = Some(args.iter().map(crate::impls::interned_ty).collect());
-        match crate::facts::definition_of(db, &head) {
-            Some(Definition::Class(class)) => Ok((DeclRef::Source(class), pinned)),
-            Some(_) => Err(ConstructorMiss::Unresolved),
-            None => mounted_class_loc(db, &head)
-                .map(|class| (DeclRef::External(class), pinned))
-                .ok_or(ConstructorMiss::Unresolved),
+        match crate::facts::definition_of(db, &class_head) {
+            Some(Definition::Class(class)) => self.class_head(DeclRef::Source(class), pinned),
+            Some(_) => Err(ClassHeadMiss::Unresolved),
+            None => {
+                let class = mounted_class_loc(db, &class_head).ok_or(ClassHeadMiss::Unresolved)?;
+                self.class_head(DeclRef::External(class), pinned)
+            }
         }
     }
 
-    /// The class `ty` denotes once aliases are expanded: a class itself, or
-    /// an alias chain ending in one. A chain that revisits an alias is a
-    /// declaration cycle (rejected at its declaration) and denotes no class.
-    fn class_denoted_by(
+    /// A head that names `class`, unless the class is a builtin's
+    /// companion, which denotes its builtin rather than itself.
+    fn class_head(
         &self,
-        mut ty: baml_type::Ty,
-    ) -> Option<(baml_type::DeclName, Vec<baml_type::Ty>)> {
-        let mut visited: Vec<baml_type::DeclName> = Vec::new();
-        loop {
-            match ty {
-                baml_type::Ty::Class(head, args) => return Some((head, args.to_vec())),
-                baml_type::Ty::TypeAlias(name) => {
-                    if visited.contains(&name) {
-                        return None;
-                    }
-                    ty = crate::facts::uncached_alias_def(self.db, &name)?;
-                    visited.push(name);
-                }
-                _ => return None,
-            }
+        class: ClassRef<'db>,
+        pinned: Option<Vec<Ty>>,
+    ) -> Result<ClassHead<'db>, ClassHeadMiss> {
+        let class_name = match class {
+            DeclRef::Source(class) => crate::lower::class_qualified_name(self.db, class),
+            DeclRef::External(class) => class.head(self.db).clone(),
+        };
+        match baml_type::type_kind::builtin_companion_of_decl(self.lang(), &class_name) {
+            Some(companion) => Err(ClassHeadMiss::Companion(Box::new(CompanionHead {
+                class_name,
+                companion,
+            }))),
+            None => Ok(ClassHead::Class { class, pinned }),
         }
+    }
+
+    /// The type an alias value denotes once every alias in its chain is
+    /// expanded. A chain that revisits an alias is a declaration cycle
+    /// (rejected at its declaration) and denotes nothing.
+    fn alias_target(&self, mut ty: baml_type::Ty) -> Option<baml_type::Ty> {
+        let mut visited: Vec<baml_type::DeclName> = Vec::new();
+        while let baml_type::Ty::TypeAlias(name) = ty {
+            if visited.contains(&name) {
+                return None;
+            }
+            ty = crate::facts::uncached_alias_def(self.db, &name)?;
+            visited.push(name);
+        }
+        Some(ty)
     }
 
     /// A source class under construction: at `pinned` arguments when the
@@ -10004,22 +10127,6 @@ impl<'db> InferenceContext<'db> {
             self.report(PendingDiag::CannotConstructReflectionKind {
                 expr: object,
                 class_name,
-            });
-            return Ty::error();
-        }
-        if let Some(companion) =
-            baml_type::type_kind::builtin_companion_of_decl(self.lang(), &class_name)
-        {
-            for field in fields {
-                self.infer_expr(body, field.value, &Expectation::None);
-            }
-            for spread in spreads {
-                self.infer_expr(body, spread.expr, &Expectation::None);
-            }
-            self.report(PendingDiag::CannotConstructBuiltinCompanion {
-                expr: object,
-                class_name,
-                companion,
             });
             return Ty::error();
         }
@@ -10187,22 +10294,6 @@ impl<'db> InferenceContext<'db> {
             self.report(PendingDiag::CannotConstructReflectionKind {
                 expr: object,
                 class_name,
-            });
-            return Ty::error();
-        }
-        if let Some(companion) =
-            baml_type::type_kind::builtin_companion_of_decl(self.lang(), &class_name)
-        {
-            for field in fields {
-                self.infer_expr(body, field.value, &Expectation::None);
-            }
-            for spread in spreads {
-                self.infer_expr(body, spread.expr, &Expectation::None);
-            }
-            self.report(PendingDiag::CannotConstructBuiltinCompanion {
-                expr: object,
-                class_name,
-                companion,
             });
             return Ty::error();
         }
@@ -14706,6 +14797,28 @@ impl<'db> InferenceContext<'db> {
                         diags.push(TirDiagnostic {
                             error: crate::diagnostics::removed_reflect_spelling(&name)
                                 .unwrap_or(TirTypeError::UnresolvedType { name, suggestions }),
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Pat(pat),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::PatternAliasTakesNoTypeArgs { pat, name, got } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::WrongNumberOfTypeArgs {
+                                type_name: name,
+                                expected: 0,
+                                got,
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Pat(pat),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::PatternHeadNotDestructurable { pat, name, reason } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::PatternHeadNotDestructurable { name, reason },
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Pat(pat),
                             related: Vec::new(),

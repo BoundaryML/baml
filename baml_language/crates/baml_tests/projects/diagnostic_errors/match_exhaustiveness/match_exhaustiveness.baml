@@ -1047,3 +1047,31 @@ function DistinctInstantiationWitnesses(x: unknown) -> int {
         WitBox<string> { v: "a" } => 2
     }
 }
+
+// Fields left entirely unmatched under a missing case collapse to `_`, so the
+// witness count stays linear in the field count instead of listing every
+// combination of the remaining fields (one witness, not eight).
+class WitnessCollapseBig {
+    f1: bool
+    f2: bool
+    f3: bool
+    f4: bool
+}
+
+function WitnessCollapseClassFields(b: WitnessCollapseBig) -> int {
+    match (b) {
+        WitnessCollapseBig { f1: true } => 1
+    }
+}
+
+// The unmatched recursive `next` field is `_`, not `Node` and `null`.
+class WitnessCollapseNode {
+    val: int
+    next: WitnessCollapseNode?
+}
+
+function WitnessCollapseIntField(n: WitnessCollapseNode) -> int {
+    match (n) {
+        WitnessCollapseNode { val: 1 } => 1
+    }
+}

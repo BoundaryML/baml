@@ -1,0 +1,53 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// A builtin companion class stands in for its builtin, which has no
+// fields: destructuring one is rejected as constructing one is, and the
+// arm covers its column so no coverage error stacks on top.
+
+function int_companion(x: int) -> int {
+    match (x) {
+        baml.Int {} => 1,
+    }
+}
+
+function string_companion(x: string) -> int {
+    match (x) {
+        baml.String {} => 1,
+    }
+}
+
+function array_companion(x: int[]) -> int {
+    match (x) {
+        baml.Array {} => 1,
+    }
+}
+
+function map_companion(x: map<string, int>) -> int {
+    match (x) {
+        baml.Map {} => 1,
+    }
+}
+
+function type_companion(x: reflect.Type) -> int {
+    match (x) {
+        reflect.Type {} => 1,
+    }
+}
+
+// In a union column the arm is rejected the same way.
+function companion_in_union(x: int | string) -> int {
+    match (x) {
+        baml.Int {} => 1,
+        string => 2,
+    }
+}
+
+// An alias of a companion denotes the builtin, which is not a class.
+type IntCarrier = baml.Int;
+
+function companion_alias(x: int) -> int {
+    match (x) {
+        IntCarrier {} => 1,
+    }
+}

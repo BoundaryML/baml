@@ -1,0 +1,59 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × cannot destructure `baml.Int`: it is the companion class of `int`, which has no fields
+   ╭─[companion_destructure.baml:7:9]
+ 7 │         baml.Int {} => 1,
+   ·         ───────────
+   ╰────
+
+  [type] E0001
+
+  × cannot destructure `baml.String`: it is the companion class of `string`, which has no fields
+    ╭─[companion_destructure.baml:13:9]
+ 13 │         baml.String {} => 1,
+    ·         ──────────────
+    ╰────
+
+  [type] E0001
+
+  × cannot destructure `baml.Array`: it is the companion class of `array`, which has no fields
+    ╭─[companion_destructure.baml:19:9]
+ 19 │         baml.Array {} => 1,
+    ·         ─────────────
+    ╰────
+
+  [type] E0001
+
+  × cannot destructure `baml.Map`: it is the companion class of `map`, which has no fields
+    ╭─[companion_destructure.baml:25:9]
+ 25 │         baml.Map {} => 1,
+    ·         ───────────
+    ╰────
+
+  [type] E0001
+
+  × cannot destructure `reflect.Type`: it is the companion class of `reflect.Type`, which has no fields
+    ╭─[companion_destructure.baml:31:9]
+ 31 │         reflect.Type {} => 1,
+    ·         ───────────────
+    ╰────
+
+  [type] E0001
+
+  × cannot destructure `baml.Int`: it is the companion class of `int`, which has no fields
+    ╭─[companion_destructure.baml:38:9]
+ 38 │         baml.Int {} => 1,
+    ·         ───────────
+    ╰────
+
+  [type] E0001
+
+  × cannot destructure `IntCarrier`: only a class or an interface can be destructured
+    ╭─[companion_destructure.baml:48:9]
+ 48 │         IntCarrier {} => 1,
+    ·         ─────────────
+    ╰────

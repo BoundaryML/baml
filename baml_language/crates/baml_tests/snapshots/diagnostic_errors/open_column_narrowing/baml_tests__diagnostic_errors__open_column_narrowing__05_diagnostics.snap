@@ -1,0 +1,101 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0063
+
+  × unreachable arm
+    ╭─[open_column_narrowing.baml:24:23]
+ 24 │         [1]: int[] => 2,
+    ·                       ─
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[open_column_narrowing.baml:34:26]
+ 34 │         let xs: int[] => 2,
+    ·                          ─
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[open_column_narrowing.baml:44:23]
+ 44 │         [1]: int[] => 3,
+    ·                       ─
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[open_column_narrowing.baml:72:30]
+ 72 │         Box<int> { v: 1 } => 2,
+    ·                              ─
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[open_column_narrowing.baml:81:24]
+ 81 │         Ia { v: 1 } => 2,
+    ·                        ─
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[open_column_narrowing.baml:89:14]
+ 89 │         1 => 2,
+    ·              ─
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[open_column_narrowing.baml:97:17]
+ 97 │         true => 2,
+    ·                 ─
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[open_column_narrowing.baml:132:23]
+ 132 │         [1]: int[] => 2,
+     ·                       ─
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[open_column_narrowing.baml:142:23]
+ 142 │         [1]: int[] => 2,
+     ·                       ─
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[open_column_narrowing.baml:171:16]
+ 171 │         [1] => 2,
+     ·                ─
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[open_column_narrowing.baml:179:19]
+ 179 │         (1, _) => 2,
+     ·                   ─
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type unknown; missing: _
+     ╭─[open_column_narrowing.baml:186:5]
+ 186 │ ╭─▶     match (x) {
+ 187 │ │           let xs: int[] => 1,
+ 188 │ │           let n: int => 2,
+ 189 │ ╰─▶     }
+     ╰────

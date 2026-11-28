@@ -342,7 +342,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type (int | string, bool); missing: (int, true), (int, false), (string, true), (string, false)
+  × non-exhaustive match on type (int | string, bool); missing: (_, _)
      ╭─[tuples.baml:97:5]
   97 │ ╭─▶     match (t) {
   98 │ │           (int, bool) => 1,

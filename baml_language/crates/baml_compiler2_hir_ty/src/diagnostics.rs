@@ -249,6 +249,22 @@ pub enum LoopControlBarrier {
     Template,
 }
 
+/// Why a destructure head denotes nothing to destructure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotDestructurableReason {
+    /// The head names neither a class, an interface nor an alias of a
+    /// class (an enum, or an alias of one or of a primitive).
+    NotAClass,
+    /// The head is an alias of a union: no single class to destructure.
+    AliasOfUnion,
+    /// The head is an alias of an interface, which no head reaches
+    /// through an alias (a class literal does not either).
+    AliasOfInterface,
+    /// The head is a builtin's companion class (`baml.Int`), which stands
+    /// in for `builtin` and holds no fields.
+    BuiltinCompanion { builtin: &'static str },
+}
+
 /// The syntactic context an irrefutable-pattern rule fires in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IrrefutableContextKind {
@@ -752,6 +768,12 @@ pub enum TirTypeError {
     /// or-patterns — see `lower_array_pat` for why each is blocked and what
     /// expanding the set would take.
     RestSubPatternNotBinding,
+    /// A destructure pattern's head denotes neither a class nor an
+    /// interface: nothing to destructure.
+    PatternHeadNotDestructurable {
+        name: Name,
+        reason: NotDestructurableReason,
+    },
     /// A `let` statement or `for-let` binding uses a pattern that can fail
     /// for values of the type flowing into it.
     RefutablePatternInLet {
@@ -2258,6 +2280,27 @@ impl TirTypeError {
                     f,
                     "rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`"
                 ),
+                TirTypeError::PatternHeadNotDestructurable { name, reason } => match reason {
+                    NotDestructurableReason::NotAClass => write!(
+                        f,
+                        "cannot destructure `{name}`: only a class or an interface can be \
+                         destructured"
+                    ),
+                    NotDestructurableReason::AliasOfUnion => write!(
+                        f,
+                        "cannot destructure `{name}`: it is an alias of a union, not of a class"
+                    ),
+                    NotDestructurableReason::AliasOfInterface => write!(
+                        f,
+                        "cannot destructure `{name}`: it is an alias of an interface, not of a \
+                         class"
+                    ),
+                    NotDestructurableReason::BuiltinCompanion { builtin } => write!(
+                        f,
+                        "cannot destructure `{name}`: it is the companion class of `{builtin}`, \
+                         which has no fields"
+                    ),
+                },
                 TirTypeError::RefutablePatternInLet { context } => write!(
                     f,
                     "refutable pattern in {} binding; refutable patterns belong in `match`",

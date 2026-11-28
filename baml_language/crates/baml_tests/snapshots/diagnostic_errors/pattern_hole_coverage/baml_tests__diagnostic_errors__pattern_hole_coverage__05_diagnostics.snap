@@ -1,0 +1,62 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[pattern_hole_coverage.baml:15:32]
+ 15 │         let v: _ => takes_true(v),
+    ·                                ┬
+    ·                                ╰── expected `true`, found `bool`
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[pattern_hole_coverage.baml:23:17]
+ 23 │         true => 2,
+    ·                 ─
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[pattern_hole_coverage.baml:30:16]
+ 30 │         int => 2,
+    ·                ─
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type unknown; missing: _
+    ╭─[pattern_hole_coverage.baml:37:5]
+ 37 │ ╭─▶     match (x) {
+ 38 │ │           let b: Box<_> => 1,
+ 39 │ ╰─▶     }
+    ╰────
+
+  [type] E0147
+
+  × type inference failed; write the type explicitly
+    ╭─[pattern_hole_coverage.baml:38:16]
+ 38 │         let b: Box<_> => 1,
+    ·                ──────
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type bool; missing: true, false
+    ╭─[pattern_hole_coverage.baml:43:5]
+ 43 │ ╭─▶     match (x) {
+ 44 │ │           let b: Box<_> => 1,
+ 45 │ ╰─▶     }
+    ╰────
+
+  [type] E0147
+
+  × type inference failed; write the type explicitly
+    ╭─[pattern_hole_coverage.baml:44:16]
+ 44 │         let b: Box<_> => 1,
+    ·                ──────
+    ╰────

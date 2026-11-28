@@ -1,0 +1,46 @@
+// A `_` hole in a type pattern solves from the scrutinee, and coverage
+// reads the solved type. A hole that stays unsolved proves nothing.
+class Box<T> {
+    v: T,
+}
+
+function takes_true(v: true) -> int {
+    1
+}
+
+// The hole is the scrutinee's `bool`, not `true`: the arm covers both
+// values, and passing `v` where `true` is expected is a type error.
+function hole_solves_to_the_scrutinee(b: bool) -> int {
+    match (b) {
+        let v: _ => takes_true(v),
+    }
+}
+
+// Every `bool` is taken by the hole: `true` is unreachable.
+function hole_covers_bool(b: bool) -> int {
+    match (b) {
+        let v: _ => 1,
+        true => 2,
+    }
+}
+
+function hole_covers_union(x: int | string) -> int {
+    match (x) {
+        let v: _ => 1,
+        int => 2,
+    }
+}
+
+// Nothing solves the hole: the arm covers nothing, so the match is not
+// exhaustive.
+function unsolved_hole_on_unknown(x: unknown) -> int {
+    match (x) {
+        let b: Box<_> => 1,
+    }
+}
+
+function unsolved_hole_on_bool(x: bool) -> int {
+    match (x) {
+        let b: Box<_> => 1,
+    }
+}
