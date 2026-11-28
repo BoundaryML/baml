@@ -236,6 +236,82 @@ How calls are driven: a `Call` that is polled gives the library a turn when one 
 
 The bindings for the type-shapes fixture are in `baml_native_host/tests/type_shapes/bindings.rs`: plain structs, enums and union enums with the names `sdkgen_rust` emits, and one async function per export under its own name, with its arguments taken as `sdkgen_rust` takes them (today's SDK also emits a `_sync` twin, which these leave out).
 
+## Python (built)
+
+The crate `baml_native_python` is a pyo3 module, `baml_native._native`, built on the core alone, with a small Python package `baml_native` in front of it. A generated package uses it in place of today's runtime: it gives `load`, `set_type_map` and `define_function` with the signatures `baml_bridge` has.
+
+```
+ baml_sdk (today's generated package)      classes, enums, signatures unchanged
+        │   define_function(...) from baml_native instead of baml_bridge
+ ┌──────▼─────────────────────────────────┐
+ │ baml_native._native (pyo3)            │  plans, the loop, calls, errors
+ ├───────────────────────────────────────┤
+ │ baml_native_host core                 │  Library, Session, BamlValue, Interface
+ └───────────────────────────────────────┘
+```
+
+| Piece | What it is |
+|---|---|
+| `load(path, hash)` | `Library::load`, then a plan for each type of `Library::interface()`, the interface as a typed tree. The thread that loads the library is the only one that may call it |
+| `set_type_map(tm)` | The generated type map. A class or enum finds its Python class through it the first time it is used. Fields are matched to pydantic attributes by alias, then name |
+| `define_function(fqn, mode, ...)` | Today's signature. Async gives a coroutine object, whose arguments are read when it is first awaited, as an `async def` reads them; never awaited, it warns as a coroutine does. Sync gives a blocking call. A function not in the library's interface still imports, and raises `NotImplementedError`. It does not bind `self`: methods installed on a class are not supported (none packs today) |
+| Results | One native call per result: a walk over the core's reads that builds `int`, `str`, `list`, `dict`, enum members and models directly. A union picks its member by tag when one member alone has it, otherwise by `class_of` or by every element of a list or map. A model that allows extra fields, or has private attributes, validators or a `model_post_init`, is made with `model_validate` |
+| Arguments | Built by the parameter's declared type, by today's encoder's rules (`bridge_encode`, Python): `bool` is not an `int`; an `int` fits a `float` only when exact; an enum member is a variant of its own enum only, told apart before the `str` it mixes in; a `str` names a variant; a `dict` whose keys are fields stands in for a class (a missing field is null where null is allowed). Under a union: rank by shape (identity, natural, conversion), then one type, then the value's own type, then fewest omitted fields, else `TypeError` ("fits more than one"). A `dict` argument is walked from a snapshot of its items |
+| Errors | Today's classes, from `baml_bridge.errors`. A throw becomes `BamlError(value, class_name="user.<class>")`, typed when the declared throws type fits. A panic becomes `BamlPanic`. A refusal becomes `TypeError` with the library's reason |
+| `set_unhandled_spawn_error_handler` | Today's contract and default (print, then exit). It is called after the turn that found the failure, with nothing held |
+
+How it joins asyncio:
+
+- The library's `wake` comes from its I/O thread, without the GIL. It sets a flag and writes one byte to a socket pair, as today's bridge does. The loop watches the socket (`add_reader`), and a turn runs on the loop's thread. The flag is cleared before a turn, so a wake that comes during one asks for another.
+- A BAML timer becomes a `call_later` timer of the joined loop, armed from every turn that returns one, so a task spawned by a call that already returned still runs when it sleeps. A call that ends in its first turn and leaves a timer set joins the running loop for it. With no loop at all (sync calls only), such tasks advance during later calls; a returned call's task that waits only on I/O, with no timer, advances when a loop is joined or at the next call.
+- An async call is a coroutine object (`__await__`, `send`, `throw`, `close`), so `await`, `asyncio.run`, `create_task`, `gather` and `wait_for` take it. Its first step starts the call and runs a turn. A call that ends in that turn returns there, with no future and no trip around the loop. Otherwise it waits on a future of the joined loop.
+- Cancelling the awaiting task does not stop the BAML call: its result is freed unread when it arrives.
+- A sync call turns until its call ends. Between turns it waits for `wake` or the next timer with the GIL released, in slices of 50 ms that look for signals, so Ctrl-C ends it; the call is then abandoned, and no wake is lost. It delivers the results of other calls that end meanwhile. A call's result belongs to its call id from the start, whichever turn delivers it (a sync call made from the unhandled-error handler, say).
+- A panic while a result is built becomes that call's exception; the other results of the turn are still delivered and every handle is freed. A future that cannot take its result (cancelled meanwhile, or of a closed loop) stops nothing else.
+- One loop at a time. A call that must wait on another loop moves the reader there when the old loop is closed or has nothing in flight. Otherwise it is a `RuntimeError`. A call from another thread is a `RuntimeError`, as is a call made from Python code run while a result is being built. Neither is ever a hang.
+- The GIL is released while BAML runs in a turn, and taken again for each result copied.
+
+What differs from today's SDK:
+
+- `baml.panics.Exit` raises `BamlPanic`. It does not `os._exit`.
+- A stuck call raises `BamlPanic` with `baml.panics.Stuck`. Today's VM has no such error: such a call never ends.
+- Arguments may nest 200 levels; the protobuf wire allowed 32.
+- No `_baml=` options, cancellation of the BAML call, streams, or generics.
+- Argument rules are today's, and checked against today's SDK by the same tests (`test_arguments.py` runs against both). Argument errors come at `await`, as today: a missing argument is `BamlError` with `baml.errors.InvalidArgument`, too many positional arguments a `TypeError`.
+
+The bindings are today's generated package for the type-shapes fixture plus `bridge_test`, with 81 lines changed, all of them imports or the init call. `tests/type_shapes/setup.sh` makes them and lists them. Today's 136 tests for the fixture run against them unchanged: 79 pass and 57 are skipped. 51 of the skips are tests that call a function not in the library's interface, whatever they catch. 6 need standard-library handles (4), media (1), or the wire's 32-level limit (1). The crate's own 50 tests pass too (10 of them run against today's SDK as well, with the same answers). All of it passes again under `BAML_GC_STRESS=1`, and with models made by `model_validate`.
+
+On Apple M5 Max, Python 3.13, through `perfq --bench` (#1170, #1172 to #1177). Each number is the median of 3 or 5 interleaved rounds, each round the median of 3 runs. Outside load was 0.33 to 0.48 cores. "Today's" is the generated Python SDK of the same sources over the VM (`baml_bridge`, release). Native models are made by the native construct (below), and the GIL is released.
+
+| One call, one after another | Today's, async | Native, async | Today's, sync | Native, sync |
+|---|---|---|---|---|
+| `round_trip_int` | 43.7 µs, 365,662 instr. | 291 ns, 8,151 | 29.0 µs, 321,451 | 201 ns, 5,700 |
+| `round_trip_inner` | 56.3 µs, 535,869 | 713 ns, 20,157 | 38.5 µs, 487,947 | 621 ns, 17,509 |
+| `round_trip_complex_profile` | 478 µs, 9,547,442 | 19.6 µs, 465,552 | 456 µs, 9,477,652 | 19.1 µs, 461,686 |
+
+| Arrays, sync, per element | Today's | Native | Pure Python, same objects |
+|---|---|---|---|
+| `int[]` of 100,000 out | 326 ns | 79 ns, 502 instr. | 13 ns |
+| `int[]` of 100,000 in | 534 ns, 9,359 instr. | 13 ns, 128 | 7 ns |
+| `Point[]` of 10,000 out | 3,350 ns | 343 ns, 6,488 | 326 ns |
+| `Point[]` of 10,000 in | 5,316 ns, 136,673 | 97 ns, 1,682 | 37 ns |
+
+Instructions come from running each case at n and 2n. For the "in" rows they are net of building the argument, which the pure-Python run does too.
+
+After the review's fixes (#1237 to #1245) the Mac's outside load was 0.74 to 1.17 cores, too much to quote times. Instruction counts, which do not depend on it, are within about 1% of the table above (profile 467,007 sync, `Point[]` in 13,074 gross). The times agree with it too, and so do their ratios to today's SDK, which each job measures interleaved: sync `round_trip_int` 209 ns, inner 638 ns, profile 19.2 µs, `Point[]` in 98 ns.
+
+How a model is made decides most of what is left. Today's SDK validates, so the table below shows like for like: the native bridge making models three ways, beside pure Python building the same objects each way with no bridge (#1172, #1175, #1177, sync).
+
+| | Today's (validates) | Native: validate | Native: `model_construct` | Native: native construct | Python: validate | Python: `model_construct` | Python: native construct |
+|---|---|---|---|---|---|---|---|
+| `round_trip_inner` | 38.5 µs | 822 ns | 1,067 ns | 621 ns | 317 ns | 537 ns | 223 ns |
+| `round_trip_complex_profile` | 456 µs | 26.9 µs | 34.0 µs | 19.1 µs | 27.2 µs | 35.0 µs | 20.7 µs |
+| `Point[]` out, per element | 3,350 ns | 550 ns | 800 ns | 343 ns | 428 ns | 695 ns | 326 ns |
+
+- With validation kept, the profile goes from 456 µs to 26.9 µs. That is the bridge alone, 17×, and it lands on what pydantic validation costs with no bridge at all (27.2 µs). Skipping validation takes it to 19.1 µs.
+- `model_construct` is slower than validating: it is Python code. The native construct does what it does, from Rust: `object.__new__(cls)`, then `__dict__`, `__pydantic_fields_set__`, `__pydantic_extra__` and `__pydantic_private__` set with the generic setter. It depends on those four pydantic v2 slots, and on the generated models having no private attributes and no validators that change values. It is the default.
+- The GIL (#1185, #1183, #1184, #1181): releasing it costs 27 to 30 ns, about 1,200 instructions, on a call that ends at once, and nothing measurable on `make_ints(1,000,000)` or on the profile. While a thread made long calls, another Python thread ran about 14 times as many iterations with the GIL released (37 M held, 505 to 538 M released). It is released by default.
+
 ## Measured
 
 On the Rust host, Apple M5 Max, through `perfq --bench` (#1092): the median of eight interleaved rounds, outside load 0.33 cores. Instructions per call come from running each case at two sizes. "Today's SDK" is the generated Rust SDK of the same fixture over the VM (`bridge_cffi`, release), called the same way.

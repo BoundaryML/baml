@@ -77,6 +77,7 @@ bcs_api = { path = "crates/bcs_api", default-features = false }
 btel_bcs = { path = "crates/btel_bcs", default-features = false }
 btel_snapshot = { path = "crates/btel_snapshot" }
 bex_str = { path = "crates/bex_str" }
+baml_native_host = { path = "crates/baml_native_host" }
 baml_base = { path = "crates/baml_base" }
 baml_artifact = { path = "crates/baml_artifact" }
 baml_linker = { path = "crates/baml_linker" }

@@ -886,6 +886,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_native_python"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_native_host",
+ "pyo3",
+ "pyo3-build-config",
+]
+
+[[package]]
 name = "baml_native_rt"
 version = "0.0.0-beta"
 dependencies = [
