@@ -7,6 +7,8 @@ use serde::Deserialize;
 pub(crate) struct Boundary {
     pub project: Option<String>,
     pub api_url: Option<String>,
+    /// The control plane the `baml cloud` management commands talk to.
+    pub services_url: Option<String>,
     /// Builds sent to Boundary carry the package's source text (BEP-088).
     #[serde(default = "enabled")]
     pub upload_source: bool,
@@ -21,6 +23,7 @@ impl Default for Boundary {
         Self {
             project: None,
             api_url: None,
+            services_url: None,
             upload_source: true,
         }
     }
@@ -50,6 +53,12 @@ impl Boundary {
     }
     pub fn endpoint(&self) -> bcs_api::error::Result<bcs_api::Endpoint> {
         bcs_api::endpoint(self.api_url.as_deref())
+    }
+    pub fn services_endpoint(
+        &self,
+        api: &bcs_api::Endpoint,
+    ) -> bcs_api::error::Result<bcs_api::Endpoint> {
+        bcs_api::services_endpoint(self.services_url.as_deref(), api)
     }
 }
 pub(crate) fn login_endpoint(project_dir: Option<&Path>) -> Result<bcs_api::Endpoint> {

@@ -13,6 +13,7 @@ workspace = true
 [features]
 default = [ "auth", "aws-crypto" ]
 auth = [ "dep:baml_env", "dep:dirs", "bcs-sdk/auth" ]
+cloud = [ "auth", "bcs-sdk/cloud" ]
 aws-crypto = [ "bcs-sdk/aws-crypto" ]
 ring-crypto = [ "bcs-sdk/ring-crypto" ]
 

@@ -17,8 +17,9 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 
 use crate::{
     ExitCode,
+    cloud::CloudScope,
     output::{run_command, run_raw},
-    recordings::{Backend, CloudScope, Query, RecordingsCommands},
+    recordings::{Backend, Query, RecordingsCommands},
 };
 
 pub(crate) const fn release_version() -> &'static str {
@@ -161,7 +162,7 @@ pub(crate) enum Commands {
 
     #[command(
         about = "Boundary Cloud: everything that needs an account",
-        after_long_help = "Examples:\n  Log in:\n    baml cloud auth login\n\n  Query your cloud recordings:\n    baml cloud recordings query \"SELECT span_name FROM spans LIMIT 5\""
+        after_long_help = "Examples:\n  Log in:\n    baml cloud auth login\n\n  Query your cloud recordings:\n    baml cloud recordings query \"SELECT span_name FROM spans LIMIT 5\"\n\n  List the members of an organization:\n    baml cloud members list --org acme"
     )]
     Cloud(CloudArgs),
 
@@ -250,6 +251,62 @@ pub(crate) enum CloudCommands {
         after_long_help = "Examples:\n  Run a query:\n    baml cloud recordings query \"SELECT span_name FROM spans LIMIT 5\"\n\n  Pick the project and environment:\n    baml cloud recordings query \"SELECT span_name FROM spans\" --project acme/app --env staging"
     )]
     Recordings(RecordingsCommands),
+
+    #[command(
+        subcommand,
+        about = "Manage organizations",
+        after_long_help = "Examples:\n  List your organizations:\n    baml cloud org list\n\n  Create one:\n    baml cloud org create \"Acme Inc\" --handle acme"
+    )]
+    Org(crate::cloud::organizations::OrgCommands),
+
+    #[command(
+        subcommand,
+        about = "Manage an organization's members",
+        after_long_help = "Examples:\n  List members:\n    baml cloud members list\n\n  Make a member an administrator:\n    baml cloud members update alice@acme.com --role admin"
+    )]
+    Members(crate::cloud::members::MembersCommands),
+
+    #[command(
+        subcommand,
+        about = "Manage an organization's pending invitations",
+        after_long_help = "Examples:\n  Invite someone:\n    baml cloud invitations create alice@acme.com\n\n  List pending invitations:\n    baml cloud invitations list"
+    )]
+    Invitations(crate::cloud::members::InvitationsCommands),
+
+    #[command(
+        subcommand,
+        about = "Manage an organization's projects",
+        after_long_help = "Examples:\n  List projects:\n    baml cloud project list\n\n  Create one:\n    baml cloud project create app --org acme"
+    )]
+    Project(crate::cloud::organizations::ProjectCommands),
+
+    #[command(
+        subcommand,
+        about = "Manage a project's environments",
+        after_long_help = "Examples:\n  List environments:\n    baml cloud env list --project acme/app\n\n  Show your personal environment:\n    baml cloud env show --personal"
+    )]
+    Env(crate::cloud::organizations::EnvCommands),
+
+    #[command(
+        subcommand,
+        about = "Manage a project's dashboards",
+        after_long_help = "Examples:\n  List dashboards:\n    baml cloud dashboards list\n\n  Create one from an HTML file:\n    baml cloud dashboards create latency.html --key latency"
+    )]
+    Dashboards(crate::cloud::dashboards::DashboardsCommands),
+
+    #[command(
+        subcommand,
+        about = "Show how much an organization recorded",
+        after_long_help = "Examples:\n  Show the last 30 days:\n    baml cloud usage show"
+    )]
+    Usage(crate::cloud::billing::UsageCommands),
+
+    #[command(
+        subcommand,
+        about = "Manage an organization's plan and billing",
+        after_long_help = "Examples:\n  Show the plan:\n    baml cloud billing show\n\n  See what an upgrade costs:\n    baml cloud billing upgrade --preview"
+    )]
+    Billing(crate::cloud::billing::BillingCommands),
 }
 
 impl RuntimeCli {
@@ -346,6 +403,14 @@ impl RuntimeCli {
             Commands::Cloud(cloud) => match &cloud.command {
                 CloudCommands::Auth(command) => command.run(cx, &cloud.scope),
                 CloudCommands::Recordings(command) => command.run(cx, Backend::Cloud(&cloud.scope)),
+                CloudCommands::Org(command) => command.run(cx, &cloud.scope),
+                CloudCommands::Members(command) => command.run(cx, &cloud.scope),
+                CloudCommands::Invitations(command) => command.run(cx, &cloud.scope),
+                CloudCommands::Project(command) => command.run(cx, &cloud.scope),
+                CloudCommands::Env(command) => command.run(cx, &cloud.scope),
+                CloudCommands::Dashboards(command) => command.run(cx, &cloud.scope),
+                CloudCommands::Usage(command) => command.run(cx, &cloud.scope),
+                CloudCommands::Billing(command) => command.run(cx, &cloud.scope),
             },
             Commands::Query(args) => run_command(
                 &Query {

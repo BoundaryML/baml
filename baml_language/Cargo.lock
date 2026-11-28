@@ -452,6 +452,7 @@ dependencies = [
  "hex",
  "indicatif",
  "insta",
+ "jiff",
  "libc",
  "libsui",
  "mimalloc",
@@ -1114,8 +1115,7 @@ dependencies = [
 [[package]]
 name = "bcs-sdk"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfe3612a73f713a53a2e53da7adfee3a7e6153dc8cdf0f2c28c55254bc9ff615"
+source = "git+https://github.com/BoundaryML/bcs.git?rev=834a0e7cf6d618a22a5dda9842cb23f7994e98fd#834a0e7cf6d618a22a5dda9842cb23f7994e98fd"
 dependencies = [
  "btel-core",
  "bytes",
@@ -1773,8 +1773,7 @@ dependencies = [
 [[package]]
 name = "btel-core"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a3b895b9ccc97f4a005038bed67f14043ce2b73f957fd93a1991bdd3c40a8af"
+source = "git+https://github.com/BoundaryML/bcs.git?rev=834a0e7cf6d618a22a5dda9842cb23f7994e98fd#834a0e7cf6d618a22a5dda9842cb23f7994e98fd"
 dependencies = [
  "base64",
  "num-bigint",

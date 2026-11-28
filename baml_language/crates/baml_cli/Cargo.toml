@@ -32,7 +32,7 @@ baml_release = { workspace = true }
 baml_sdkgen_types = { workspace = true }
 baml_type = { workspace = true }
 baml_version = { workspace = true }
-bcs_api = { workspace = true, features = [ "auth", "aws-crypto" ] }
+bcs_api = { workspace = true, features = [ "auth", "aws-crypto", "cloud" ] }
 bex_cache = { workspace = true }
 bex_engine = { workspace = true }
 bex_events = { workspace = true }
@@ -57,6 +57,7 @@ dunce = { workspace = true }
 gix = { workspace = true }
 hex = { workspace = true }
 indicatif = { workspace = true }
+jiff = { workspace = true }
 libsui = { workspace = true }
 mimalloc = { workspace = true }
 num-bigint = { workspace = true }
