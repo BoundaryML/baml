@@ -349,7 +349,7 @@ function next_prompt(
 ) -> Next? throws never {
     let seed = root.engine.seed_for(`mastery/${session}`, step);
     let streams = root.engine.split(seed);
-    let verified = bank_items().filter((item) -> { item.status() is root.engine.Verified });
+    let verified = bank_items().filter((item) -> { root.engine.can_serve(item) });
     let drawn = root.engine.batch(
         verified,
         streams.left,

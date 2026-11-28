@@ -602,11 +602,8 @@ class UnguardedCycleItem {
     }
 }
 
-/// `let x: A | (B | C) = v` for a `v` of type `A | B | D`, which the spec
-/// rejects — `D` is in neither part — and the compiler accepts: see
-/// COMPILER_DIVERGENCE.md, CD-003. It is `union_regrouped_differs` put where
-/// `sites_for` will not put it: at the binding, flowing into the side that
-/// nests.
+/// A shared union member is insufficient for assignment. The nested annotation
+/// must also admit the source member that remains after regrouping.
 class NestedUnionLetItem {
     implements root.engine.Item {
         function id(self) -> string throws never {
@@ -614,9 +611,8 @@ class NestedUnionLetItem {
         }
 
         function status(self) -> root.engine.Status throws never {
-            root.engine.CompilerDiverges {
-                divergence: "CD-003",
-                contradiction: root.engine.Contradiction.Accepts,
+            root.engine.Verified {
+                conformance_only: true,
             }
         }
 

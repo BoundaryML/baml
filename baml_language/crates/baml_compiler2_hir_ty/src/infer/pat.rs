@@ -373,7 +373,18 @@ impl<'db> InferenceContext<'db> {
             None => Ty::error(),
         };
         let resolved = self.scrutinee_demand(&init_ty);
-        let outcome = self.lower_pattern(body, pattern, &resolved);
+        self.lower_let_pattern(body, pattern, &resolved, has_else);
+    }
+
+    pub(super) fn lower_let_pattern(
+        &mut self,
+        body: &ExprBody,
+        pattern: PatId,
+        resolved: &Ty,
+        has_else: bool,
+    ) {
+        let before = self.journals.pending_diags.len();
+        let outcome = self.lower_pattern(body, pattern, resolved);
         // A refutable pattern in an irrefutable position has nowhere to
         // go when it fails (E0111) - unless the `else` branch IS that
         // somewhere (`let Ok(v) = f() else { return }` is the refutable
@@ -383,6 +394,16 @@ impl<'db> InferenceContext<'db> {
             && !outcome.matched_ty.has_error()
             && !resolved.has_error()
             && !resolved.has_infer()
+            && !self.journals.pending_diags[before..].iter().any(|diag| {
+                matches!(
+                    diag,
+                    super::PendingDiag::BodyAnnot { .. }
+                        | super::PendingDiag::PatternScrutMismatch { .. }
+                        | super::PendingDiag::ListPatternNeverMatches { .. }
+                        | super::PendingDiag::UnknownPatternField { .. }
+                        | super::PendingDiag::UnresolvedPatternName { .. }
+                )
+            })
         {
             self.report(super::PendingDiag::RefutableLet {
                 pat: pattern,
@@ -636,6 +657,10 @@ impl<'db> InferenceContext<'db> {
                 self.lower_tuple_pattern(body, pat, &elements, scrut)
             }
             Pattern::Or(alts) => {
+                // A nested field can introduce a fresh alias even when its parent
+                // column is normalized. Tag alternatives using the matrix's column type.
+                let (column, residual) = (self.matrix_scrut(scrut), self.matrix_scrut(reaching));
+                let (scrut, reaching) = (&column, &residual);
                 let alts = alts.clone();
                 let outcomes: Vec<PatternOutcome> =
                     self.with_suppressed(Suppress::OrPattern, |this| {
@@ -695,13 +720,30 @@ impl<'db> InferenceContext<'db> {
                         .map(|outcome| outcome.matched_ty.clone())
                         .collect::<Vec<_>>(),
                 );
+                let has_total_alternative = outcomes.iter().any(|outcome| outcome.covers_type);
+                let consumes_matched = outcomes.iter().all(|outcome| outcome.consumes_matched);
+                let dpat = DPat::or(
+                    outcomes.into_iter().map(|outcome| outcome.dpat).collect(),
+                    dpat_ty(scrut),
+                );
+                // Use the same constructor matrix as match arms. This accounts
+                // for alternatives that cover different fields or union members.
+                let covers_type = has_total_alternative
+                    || (!scrut.has_error()
+                        && baml_type::interned::ClosedTy::try_from(scrut).is_ok_and(|closed| {
+                            let ctx = HirPatCtx { infer: self };
+                            compute_match_usefulness(
+                                &ctx,
+                                std::slice::from_ref(&dpat),
+                                closed.to_plain(),
+                            )
+                            .missing
+                            .is_empty()
+                        }));
                 PatternOutcome {
-                    covers_type: outcomes.iter().any(|outcome| outcome.covers_type),
-                    consumes_matched: outcomes.iter().all(|outcome| outcome.consumes_matched),
-                    dpat: DPat::or(
-                        outcomes.into_iter().map(|outcome| outcome.dpat).collect(),
-                        dpat_ty(scrut),
-                    ),
+                    covers_type,
+                    consumes_matched,
+                    dpat,
                     matched_ty: matched,
                     recorded_ty: None,
                 }
@@ -1632,14 +1674,21 @@ impl<'db> InferenceContext<'db> {
                     dpat,
                     matched_ty: self.union_of(&matched),
                     recorded_ty: None,
-                    covers_type: false,
+                    covers_type: consumes && claimed.len() == members.len(),
                     consumes_matched: consumes,
                 };
             }
         }
-        let error_slots = vec![Ty::error(); arity];
+        // An impossible alternative binds no values. Its children must also
+        // get the bottom type when no error was reported for the tuple.
+        let recovery_ty = if self.dead_pattern_is_quiet() && !structure.has_error() {
+            Ty::never()
+        } else {
+            Ty::error()
+        };
+        let slots = vec![recovery_ty.clone(); arity];
         self.with_suppressed(Suppress::OrPattern, |this| {
-            this.lower_tuple_elements(body, elements, &error_slots, &Ty::error());
+            this.lower_tuple_elements(body, elements, &slots, &recovery_ty);
         });
         if !self.dead_pattern_is_quiet() && !structure.has_error() && !structure.has_infer() {
             self.report(super::PendingDiag::PatternScrutMismatch {
@@ -1648,9 +1697,11 @@ impl<'db> InferenceContext<'db> {
                 found: Ty::tuple(vec![Ty::intern(InferTy::Unknown); arity]),
             });
         }
+        // No tuple member has this shape. Recovery for its element bindings
+        // must contribute no values to an enclosing OR-pattern.
         PatternOutcome {
-            dpat: DPat::wildcard(dpat_ty(scrut)),
-            matched_ty: Ty::error(),
+            dpat: DPat::type_test(baml_type::Ty::Never, dpat_ty(scrut)),
+            matched_ty: recovery_ty,
             recorded_ty: None,
             covers_type: false,
             consumes_matched: false,
@@ -1878,7 +1929,9 @@ impl<'db> InferenceContext<'db> {
             // something other than a list (`unknown`, a type parameter) is
             // never wholly accepted.
             covers_type: covers
-                && ascribed.is_none()
+                && ascribed
+                    .as_ref()
+                    .is_none_or(|ty| self.provable_subtype(scrut, ty))
                 && scrutinee_is_lists
                 && claimed.len() == holder_count,
             consumes_matched: covers && claims_only_lists,

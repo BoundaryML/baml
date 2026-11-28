@@ -737,7 +737,7 @@ test "pairs: every foil is the same program a step away, answering the other way
 function items_answering_report() -> string throws never {
     let counted = root.bank
         .items()
-        .filter((item) -> { item.status() is root.engine.Verified })
+        .filter((item) -> { root.engine.can_serve(item) })
         .map((item) -> {
             let id = item.id();
             let produced = baml.iter.Range.new(0, 8)
@@ -782,7 +782,7 @@ function items_answering_report() -> string throws never {
 function depth_report() -> string throws never {
     let depths = root.bank
         .items()
-        .filter((item) -> { item.status() is root.engine.Verified })
+        .filter((item) -> { root.engine.can_serve(item) })
         .flat_map((item) -> {
             let id = item.id();
             baml.iter.Range.new(0, 8)
@@ -827,7 +827,7 @@ test "bank: nearly every case it can draw turns on a single rule" {
 function sites_reached_report() -> string throws never {
     let concluded = root.bank
         .items()
-        .filter((item) -> { item.status() is root.engine.Verified })
+        .filter((item) -> { root.engine.can_serve(item) })
         .flat_map((item) -> {
             let id = item.id();
             baml.iter.Range.new(0, 8)

@@ -893,6 +893,21 @@ function sites_of(flow: Flow) -> root.algebra.SiteKind[] throws never {
     root.algebra.sites_for(root.algebra.all_sites(), flow.source, flow.target)
 }
 
+test "sites: nested unions can flow both ways at a let binding" {
+    let leaf = root.algebra.Prim.int();
+    let nested = root.algebra.Union.new([
+        leaf,
+        root.algebra.Union.new([root.algebra.Prim.string(), root.algebra.Prim.bool()]),
+    ]);
+    let binding: root.algebra.SiteKind[] = [root.algebra.SiteKind.Let];
+    assert.equal(root.algebra.sites_for(binding, nested, leaf), binding);
+    assert.equal(root.algebra.sites_for(binding, leaf, nested), binding);
+    let variable = root.algebra.Var.new("T");
+    let sites: root.algebra.SiteKind[] = [root.algebra.SiteKind.Field, root.algebra.SiteKind.Let];
+    assert.equal(root.algebra.sites_for(sites, nested, variable), binding);
+    assert.equal(root.algebra.sites_for(sites, variable, nested), binding)
+}
+
 function site_case(site: root.algebra.SiteKind, flow: Flow) -> root.engine.Case throws never {
     let p = root.algebra.probe(site, flow.source, flow.target, site_names());
     let file = "case.baml";

@@ -264,13 +264,12 @@ class Planned {
 /// then picks among those that have it proportional to score. Only when the
 /// budget is spent without one does the turn fall back to the whole pool.
 ///
-/// Only `Verified` items are served: the quiz presents the compiler's answer
-/// as the truth, so an item the compiler is known to disagree with has no
-/// place in a session.
+/// A session draws verified practice items. One-sided regression examples
+/// stay in the compiler conformance suite.
 function session(items: Item[], seed: Seed, weights: Weights, length: int, budget: Budget) -> Turn[]
     throws never
 {
-    let verified = items.filter((item) -> { item.status() is Verified });
+    let verified = items.filter((item) -> { can_serve(item) });
     let plan = schedule(seed, length);
     let step_seeds = streams(plan.next, length);
     let planned: Planned[] = baml.iter.Range.new(0, length)

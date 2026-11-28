@@ -579,7 +579,7 @@ function session_health(turns: root.engine.Turn[]) -> string[] throws never {
 
 function unverified_items_served(turns: root.engine.Turn[]) -> string[] throws never {
     let verified = root.bank.items().filter_map((item) -> {
-        if (item.status() is root.engine.Verified) {
+        if (root.engine.can_serve(item)) {
             item.id()
         } else {
             null

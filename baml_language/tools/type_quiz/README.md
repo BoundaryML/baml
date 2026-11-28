@@ -603,25 +603,9 @@ keeps its number once it has one.
    takes the `Grade` rather than its `understanding`. The encoder would need
    the declared parameter type, which the wire already carries, to lower a
    string against an enum position.
-15. **A `let` annotated with a union that nests a union is checked backwards,
-   and a value of the wrong type gets through.** `let left: bool | (string |
-   int) = right` compiles for a `right` of type `bool | string | bigint`;
-   called with `5n`, the function it sits in returns a value that reflects as
-   `bigint` in a slot typed `bool | string | int`, and an exhaustive `match`
-   over `bool`, `string` and `int` takes the `int` arm. The flat spelling of
-   the same annotation is rejected with E0001, as it should be. The trigger
-   is exact — a top-level union with a parenthesised UNION among its members,
-   which includes the natural `(A | B | C) | null` — and it is the binding
-   only: the same type as a parameter, a field, a return or an array element
-   is checked correctly, as is a union parenthesised whole and a nesting
-   inside an array or a generic argument. Where the initializer shares no
-   member with the annotation the binding is rejected, but reversed —
-   ``expected `bigint`, found `int | string | bool` `` with the span on the
-   annotation — which is what testing the annotation as a refutable pattern
-   against the initializer would say; where they share one, nothing is said.
-   Found by a near miss: the bank had been putting `A | (B | C)` at a binding
-   since it could state associativity, but only ever beside the equivalent
-   `A | B | C`, which compiles either way. Recorded as CD-003 in
-   COMPILER_DIVERGENCE.md, with an item that fails the suite when it is
-   fixed; until then no pair that would spell such an annotation is put at a
-   binding.
+15. **Nested unions in annotated let bindings (resolved in #5652).** Grouped
+    and flat union annotations now check the same assignment. The generator
+    includes these bindings, and the verified item
+    `unions/nested-in-let-annotation` checks the former divergence. Both
+    examples require rejection, so they are reserved for compiler conformance.
+    See [CD-003](COMPILER_DIVERGENCE.md#cd-003-resolved-nested-unions-in-annotated-let-bindings).

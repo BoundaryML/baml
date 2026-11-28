@@ -549,7 +549,7 @@ function parity_report() -> string throws never {
 test "learner: answering by an unrelated bit is suspected of no model" {
     assert.equal(
         parity_report(),
-        "suspected=none why=Budget commits_unsure=97 leading=covariant=18,typescript=17,structural=12,spelling=6,shape=5,bounds=-9",
+        "suspected=none why=Budget commits_unsure=97 leading=typescript=12,structural=12,covariant=9,shape=7,spelling=4,bounds=-9",
     )
 }
 

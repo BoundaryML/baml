@@ -51,7 +51,7 @@ function planning_report() -> string throws never {
 /// Only items the compiler is known to agree with are put to a learner.
 function unverified_items_asked() -> string[] throws never {
     let verified = root.bank.items().filter_map((item) -> {
-        if (item.status() is root.engine.Verified) {
+        if (root.engine.can_serve(item)) {
             item.id()
         } else {
             null
