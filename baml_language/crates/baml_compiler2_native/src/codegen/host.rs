@@ -21,7 +21,8 @@
 //! +8   u64  the interface hash
 //! +16  u32  how many classes and enums
 //! +20  u32  where their records are
-//! +24  u64  zero
+//! +24  u32  the interface as JSON (`native_pack --lib --describe`):
+//!           offset, then +28 length
 //! +32  a record per function, 56 bytes:
 //!      +0  u64  the entry's address
 //!      +8  u64  the signature's hash
@@ -214,9 +215,15 @@ pub(super) fn define_library<'db>(
         &[EXPORTS_VERSION, word(interface.functions.len())?],
     );
     bytes.extend_from_slice(&interface.hash.to_le_bytes());
+    let json = text(&interface.to_json(), &mut texts)?;
     push(
         &mut bytes,
-        &[word(interface.types.len())?, word(types_at)?, 0, 0],
+        &[
+            word(interface.types.len())?,
+            word(types_at)?,
+            json[0],
+            json[1],
+        ],
     );
     let mut param_records: Vec<u8> = Vec::new();
     let mut next_param = params_at;

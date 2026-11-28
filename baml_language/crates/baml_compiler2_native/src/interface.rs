@@ -55,6 +55,10 @@ pub struct ExportedFunction {
     /// The signature as one line of text, which [`Self::hash`] is of.
     pub signature: String,
     pub hash: u64,
+    /// The result as a tree.
+    pub(crate) result_tree: HostType,
+    /// The throws type as a tree, when it can cross.
+    pub(crate) throws_tree: Option<HostType>,
 }
 
 #[derive(Clone, Debug)]
@@ -63,6 +67,8 @@ pub struct ExportedParam {
     pub ty: String,
     /// The host may pass `OMITTED` for it.
     pub has_default: bool,
+    /// Its type as a tree.
+    pub(crate) tree: HostType,
 }
 
 #[derive(Clone, Debug)]
@@ -70,6 +76,103 @@ pub struct ExportedType {
     /// Its name with its namespace, without the package.
     pub name: String,
     pub kind: TypeKind,
+    /// A class's field types as trees, in slot order; empty for an enum.
+    pub(crate) field_trees: Vec<HostType>,
+}
+
+/// A type as a host reads it: what the interface spells as text, as a
+/// tree, each class and enum by its number. `to_json` writes it beside the
+/// text, so hosts need not parse the text. It is not hashed: it says
+/// nothing the text does not.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum HostType {
+    Int,
+    Float,
+    Bool,
+    Null,
+    String,
+    LiteralInt(i64),
+    LiteralBool(bool),
+    LiteralString(String),
+    Class(u32),
+    Enum(u32),
+    EnumVariant { of: u32, index: u32 },
+    List(Box<HostType>),
+    Map(Box<HostType>),
+    Union(Vec<HostType>),
+}
+
+impl HostType {
+    /// As JSON: a scalar by its name (`"int"`), a literal as
+    /// `{"literal": 42}`, and `{"class": 3}`, `{"enum": 1}`,
+    /// `{"enum": 1, "variant": 0}`, `{"list": T}`, `{"map": T}` (the keys
+    /// are strings), `{"union": [T, ...]}`.
+    fn write_json(&self, out: &mut String) {
+        match self {
+            Self::Int => out.push_str("\"int\""),
+            Self::Float => out.push_str("\"float\""),
+            Self::Bool => out.push_str("\"bool\""),
+            Self::Null => out.push_str("\"null\""),
+            Self::String => out.push_str("\"string\""),
+            Self::LiteralInt(value) => {
+                let _ = write!(out, "{{\"literal\": {value}}}");
+            }
+            Self::LiteralBool(value) => {
+                let _ = write!(out, "{{\"literal\": {value}}}");
+            }
+            Self::LiteralString(value) => {
+                out.push_str("{\"literal\": ");
+                json_string(out, value);
+                out.push('}');
+            }
+            Self::Class(number) => {
+                let _ = write!(out, "{{\"class\": {number}}}");
+            }
+            Self::Enum(number) => {
+                let _ = write!(out, "{{\"enum\": {number}}}");
+            }
+            Self::EnumVariant { of, index } => {
+                let _ = write!(out, "{{\"enum\": {of}, \"variant\": {index}}}");
+            }
+            Self::List(element) => {
+                out.push_str("{\"list\": ");
+                element.write_json(out);
+                out.push('}');
+            }
+            Self::Map(value) => {
+                out.push_str("{\"map\": ");
+                value.write_json(out);
+                out.push('}');
+            }
+            Self::Union(members) => {
+                out.push_str("{\"union\": [");
+                for (index, member) in members.iter().enumerate() {
+                    if index > 0 {
+                        out.push_str(", ");
+                    }
+                    member.write_json(out);
+                }
+                out.push_str("]}");
+            }
+        }
+    }
+}
+
+/// `text` as a JSON string.
+fn json_string(out: &mut String, text: &str) {
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            c if (c as u32) < 0x20 => {
+                let _ = write!(out, "\\u{:04x}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
 }
 
 #[derive(Clone, Debug)]
@@ -248,6 +351,7 @@ impl Walk<'_> {
                     self.types.push(ExportedType {
                         name,
                         kind: TypeKind::Enum(variants),
+                        field_trees: Vec::new(),
                     });
                     self.reached.push(Reached::Enum(
                         enum_ref,
@@ -280,17 +384,21 @@ impl Walk<'_> {
                 self.types.push(ExportedType {
                     name,
                     kind: TypeKind::Class(Vec::new()),
+                    field_trees: Vec::new(),
                 });
                 self.reached.push(Reached::Class(class, ty.clone()));
                 let aliases = resolved_aliases_for_package(db, head_info.root());
                 let mut fields = Vec::new();
+                let mut trees = Vec::new();
                 for (field, field_ty) in class_fields(db, class) {
                     let field_ty = aliases.0.convert(&field_ty);
                     self.reach(&field_ty)
                         .map_err(|why| format!("{why} (field `{field}`)"))?;
+                    trees.push(self.tree(&field_ty));
                     fields.push((field.to_string(), type_text(db, &field_ty)));
                 }
                 self.types[place].kind = TypeKind::Class(fields);
+                self.types[place].field_trees = trees;
                 Ok(())
             }
             RuntimeTy::List(element) => self.reach(element),
@@ -311,6 +419,68 @@ impl Walk<'_> {
             _ => refuse("a type the boundary cannot carry"),
         }
     }
+}
+
+impl Walk<'_> {
+    /// `ty` as a tree. Called after [`Self::reach`] accepted it, so every
+    /// class and enum in it has its number.
+    fn tree(&self, ty: &RuntimeTy) -> HostType {
+        let db = self.db;
+        let number = |place: usize| u32::try_from(place).expect("fewer than 2^32 types");
+        match ty {
+            RuntimeTy::Int => HostType::Int,
+            RuntimeTy::Float => HostType::Float,
+            RuntimeTy::Bool => HostType::Bool,
+            RuntimeTy::String => HostType::String,
+            RuntimeTy::Literal(Literal::Int(value), _) => HostType::LiteralInt(*value),
+            RuntimeTy::Literal(Literal::Bool(value), _) => HostType::LiteralBool(*value),
+            RuntimeTy::Literal(Literal::String(value), _) => HostType::LiteralString(value.clone()),
+            RuntimeTy::Enum(head) | RuntimeTy::EnumVariant(head, _) => {
+                let enum_ref = enum_ref_of(db, head).expect("reached, so declared");
+                let of = number(self.enums[&enum_ref]);
+                match ty {
+                    RuntimeTy::EnumVariant(_, variant) => {
+                        let index = enum_variants(db, enum_ref)
+                            .iter()
+                            .position(|candidate| candidate == variant)
+                            .expect("a variant of its enum");
+                        HostType::EnumVariant {
+                            of,
+                            index: number(index),
+                        }
+                    }
+                    _ => HostType::Enum(of),
+                }
+            }
+            RuntimeTy::Class(head, _) => {
+                let class = class_ref_of(db, head).expect("reached, so declared");
+                HostType::Class(number(self.classes[&class]))
+            }
+            RuntimeTy::List(element) => HostType::List(Box::new(self.tree(element))),
+            RuntimeTy::Map { value, .. } => HostType::Map(Box::new(self.tree(value))),
+            RuntimeTy::Union(members) => {
+                HostType::Union(members.iter().map(|member| self.tree(member)).collect())
+            }
+            // `Null`, and nothing else once `reach` accepted the type.
+            _ => HostType::Null,
+        }
+    }
+}
+
+/// Whether the runtime can be told what a value of `ty` is: the library
+/// checks what a host passes against that description. A class with
+/// `@json.flatten` or `@json.fallback` fields, or with a `to_json` or
+/// `from_json` of its own, has none a library can use yet.
+fn describable(db: &dyn baml_compiler2_mir::Db, ty: &RuntimeTy) -> Result<(), String> {
+    crate::json::JsonTypes::new()
+        .describe(db, ty)
+        .map(drop)
+        .map_err(|blocker| {
+            format!(
+                "a type the library cannot describe `{}`: {blocker}",
+                type_text(db, ty)
+            )
+        })
 }
 
 fn head_of(ty: &RuntimeTy) -> &baml_type::DeclName {
@@ -355,7 +525,7 @@ pub fn export_refusal(
                 .params
                 .iter()
                 .chain([&detail.result])
-                .try_for_each(|ty| walk.reach(ty))
+                .try_for_each(|ty| walk.reach(ty).and_then(|()| describable(db, ty)))
         })
         .err()
 }
@@ -421,7 +591,9 @@ pub(crate) fn library_detail<'db>(
             return Err(refuse("it has type parameters".to_owned()));
         }
         for ty in detail.params.iter().chain([&detail.result]) {
-            walk.reach(ty).map_err(refuse)?;
+            walk.reach(ty)
+                .and_then(|()| describable(db, ty))
+                .map_err(refuse)?;
         }
         // A thrown value is only read, never built: a throws type that
         // cannot cross does not keep the function from being exported. Its
@@ -429,7 +601,7 @@ pub(crate) fn library_detail<'db>(
         let throws_text = detail.throws.as_ref().map(|ty| type_text(db, ty));
         if let Some(ty) = &detail.throws {
             let mut trial = walk.clone();
-            if trial.reach(ty).is_ok() {
+            if trial.reach(ty).is_ok() && describable(db, ty).is_ok() {
                 walk = trial;
             } else {
                 detail.throws = None;
@@ -464,6 +636,7 @@ pub(crate) fn library_detail<'db>(
                 name,
                 ty: type_text(db, ty),
                 has_default,
+                tree: walk.tree(ty),
             })
             .collect();
         let result = type_text(db, &detail.result);
@@ -491,6 +664,8 @@ pub(crate) fn library_detail<'db>(
             throws,
             signature,
             hash,
+            result_tree: walk.tree(&detail.result),
+            throws_tree: detail.throws.as_ref().map(|ty| walk.tree(ty)),
         });
         details.push(detail);
     }
@@ -532,21 +707,7 @@ pub(crate) fn library_detail<'db>(
 impl LibraryInterface {
     /// The interface as JSON: what `native_pack --lib --describe` prints.
     pub fn to_json(&self) -> String {
-        fn string(out: &mut String, text: &str) {
-            out.push('"');
-            for c in text.chars() {
-                match c {
-                    '"' => out.push_str("\\\""),
-                    '\\' => out.push_str("\\\\"),
-                    '\n' => out.push_str("\\n"),
-                    c if (c as u32) < 0x20 => {
-                        let _ = write!(out, "\\u{:04x}", c as u32);
-                    }
-                    c => out.push(c),
-                }
-            }
-            out.push('"');
-        }
+        let string = json_string;
         let mut out = String::new();
         let _ = write!(
             out,
@@ -566,15 +727,26 @@ impl LibraryInterface {
                 string(&mut out, &param.name);
                 out.push_str(", \"type\": ");
                 string(&mut out, &param.ty);
+                out.push_str(", \"tree\": ");
+                param.tree.write_json(&mut out);
                 let _ = write!(out, ", \"has_default\": {}}}", param.has_default);
             }
             out.push_str("], \"result\": ");
             string(&mut out, &function.result);
+            out.push_str(", \"result_tree\": ");
+            function.result_tree.write_json(&mut out);
             out.push_str(", \"throws\": ");
             match &function.throws {
                 Some(throws) => string(&mut out, throws),
                 None => out.push_str("null"),
             }
+            out.push_str(", \"throws_tree\": ");
+            match &function.throws_tree {
+                Some(tree) => tree.write_json(&mut out),
+                None => out.push_str("null"),
+            }
+            out.push_str(", \"signature\": ");
+            string(&mut out, &function.signature);
             let _ = write!(
                 out,
                 ", \"throws_typed\": {}, \"hash\": \"{:016x}\"}}",
@@ -597,6 +769,10 @@ impl LibraryInterface {
                         string(&mut out, name);
                         out.push_str(", \"type\": ");
                         string(&mut out, field_ty);
+                        if let Some(tree) = ty.field_trees.get(place) {
+                            out.push_str(", \"tree\": ");
+                            tree.write_json(&mut out);
+                        }
                         out.push('}');
                     }
                     out.push_str("]}");

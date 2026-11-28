@@ -866,8 +866,12 @@ pub extern "C" fn baml_rt_task_fail(
     // SAFETY: called on a task.
     unsafe { (*worker.cur_task).flags |= TASK_FAILED };
     settle(worker, error, trace, FUTURE_ERROR);
+    // SAFETY: called on a task, which in the library form belongs to a
+    // host call.
     #[cfg(all(feature = "host-lib", not(test)))]
-    host::task_failed();
+    unsafe {
+        host::task_failed(worker.cur_task);
+    }
 }
 
 /// Run `run` on the worker's own stack, whose top free address is `stack`,
@@ -959,6 +963,10 @@ pub(crate) unsafe extern "C" fn exit_pick(worker: &mut Mutator) -> *mut Task {
         }
         (*task).state.store(DEAD, Ordering::Release);
         sched.dead = task;
+        // In the library form the call the task belonged to has one task
+        // fewer.
+        #[cfg(all(feature = "host-lib", not(test)))]
+        host::task_ended(task);
         // A run of tasks that each end by handing over to the next never
         // returns to the worker's loop, so the timers are looked at here
         // too: a sleeper is not kept waiting until the run is over. So is

@@ -91,16 +91,6 @@ pub const STATUS_THREW: u32 = 1;
 pub const STATUS_STUCK: u32 = 2;
 pub const STATUS_PANICKED: u32 = 3;
 
-/// Set in a task's flags when the host started it: its call id is in its
-/// `wait_value`, which every task it spawns inherits.
-const TASK_HOST: u32 = 1 << 4;
-/// Set in the flags of a task the host started whose call was reported
-/// stuck: whatever it returns later is dropped.
-const TASK_ABANDONED: u32 = 1 << 5;
-const _: () = assert!(
-    (TASK_HOST | TASK_ABANDONED) & (TASK_FAILED | super::TASK_MAIN | super::TASK_STOPPED_ON) == 0
-);
-
 /// What the host gives `baml_lib_init`. `size` is the size of the struct
 /// the host knows, so that a later version can add fields.
 #[repr(C)]
@@ -130,6 +120,23 @@ unsafe extern "C" {
     static baml_native_functions: usize;
 }
 
+/// One call in flight: what all its tasks share. A task's `wait_value` is
+/// the number of its call's record, which every task it spawns inherits.
+/// A record is free again once the call's last task has ended and its
+/// failures are reported.
+#[derive(Default)]
+struct CallRecord {
+    id: u64,
+    /// How many of its tasks have not ended.
+    live: u32,
+    /// How many of them failed and have not been reported.
+    failed: u32,
+    /// Its first task has returned or thrown: `on_done` has it.
+    root_done: bool,
+    /// It was reported stuck: what it returns later is dropped.
+    abandoned: bool,
+}
+
 /// A call that ended in this turn, for `on_done` after it.
 struct Ended {
     call: u64,
@@ -150,10 +157,12 @@ struct Host {
     reporting: Vec<Ended>,
     next_call: u64,
     callbacks: Callbacks,
-    /// Whether a task spawned under a call may have failed with nothing to
-    /// await it: set when a task fails, cleared once none is left waiting
-    /// for its call to finish.
-    failures: bool,
+    /// The calls in flight, by record number, and the free records.
+    calls: Vec<CallRecord>,
+    free_calls: Vec<usize>,
+    /// Records whose failures are to be reported at the end of the turn:
+    /// their last task ended, or they were found stuck.
+    to_report: Vec<usize>,
     /// Why the last call that refused something refused it.
     error: String,
 }
@@ -188,25 +197,70 @@ pub(crate) fn wake_host() {
     }
 }
 
-/// A task failed: look at the end of the turn for an error nobody awaits.
-/// Called on the worker, from `baml_rt_task_fail`.
-pub(crate) fn task_failed() {
-    let host = HOST.load(std::sync::atomic::Ordering::Acquire);
-    if !host.is_null() {
-        // SAFETY: a short write of the host's state, on the worker.
-        unsafe { (*host).failures = true };
-    }
-}
-
-/// Of a task a host call spawned: its call id, inherited from the task
-/// that spawned it. Called from `spawn_prepare`.
+/// The record of the call `task` belongs to.
 ///
 /// # Safety
 ///
-/// Both are tasks in use.
+/// `task` is a task of a host call, on the worker.
+unsafe fn record_of<'a>(task: *mut Task) -> &'a mut CallRecord {
+    // SAFETY: the caller's contract; a short reference to the host's state.
+    unsafe { &mut host().calls[(*task).wait_value] }
+}
+
+/// The task `task` failed: its error is reported once its call's last task
+/// has ended, unless something awaits it first. Called on the worker, from
+/// `baml_rt_task_fail`.
+///
+/// # Safety
+///
+/// `task` is a task of a host call, on the worker.
+pub(crate) unsafe fn task_failed(task: *mut Task) {
+    // SAFETY: the caller's contract.
+    unsafe { record_of(task).failed += 1 };
+}
+
+/// The task `child` was spawned by `parent`: it belongs to its call.
+/// Called from `spawn_prepare`.
+///
+/// # Safety
+///
+/// Both are tasks in use, `parent` of a host call.
 pub(crate) unsafe fn inherit_call(parent: *mut Task, child: *mut Task) {
     // SAFETY: the caller's contract.
-    unsafe { (*child).wait_value = (*parent).wait_value };
+    unsafe {
+        (*child).wait_value = (*parent).wait_value;
+        record_of(parent).live += 1;
+    }
+}
+
+/// The task `task` has ended. When it was its call's last, the call's
+/// failures are reported at the end of the turn and its record is freed.
+/// Called from `exit_pick`, on the task's stack.
+///
+/// # Safety
+///
+/// `task` is a task of a host call, on the worker.
+pub(crate) unsafe fn task_ended(task: *mut Task) {
+    // SAFETY: the caller's contract.
+    unsafe {
+        let number = (*task).wait_value;
+        let host = host();
+        let record = &mut host.calls[number];
+        record.live -= 1;
+        if record.live == 0 {
+            if record.failed > 0 {
+                host.to_report.push(number);
+            } else {
+                host.free_calls.push(number);
+            }
+        }
+    }
+}
+
+/// Whether `baml_lib_init` has run. Every function but those that read
+/// only the table of exports checks it first and refuses before it has.
+fn initialized() -> bool {
+    !HOST.load(std::sync::atomic::Ordering::Acquire).is_null()
 }
 
 /// The host's state. A raw pointer: a turn runs compiled code that calls
@@ -348,7 +402,9 @@ pub unsafe extern "C" fn baml_lib_init(callbacks: *const Callbacks) -> i32 {
         reporting: Vec::new(),
         next_call: 1,
         callbacks,
-        failures: false,
+        calls: Vec::new(),
+        free_calls: Vec::new(),
+        to_report: Vec::new(),
         error: String::new(),
     });
     HOST.store(Box::into_raw(host), std::sync::atomic::Ordering::Release);
@@ -407,6 +463,23 @@ pub unsafe extern "C" fn baml_lib_export_info(
     i64::try_from(signature.len()).unwrap_or(-1)
 }
 
+/// The library's interface as JSON, as `native_pack --lib --describe`
+/// prints it: every export with its parameters, and every class and enum
+/// with its fields and variants, numbered. Copied into `out`, at most
+/// `capacity` bytes. Returns the text's full length. Reads only the table
+/// of exports: it may be called before `baml_lib_init`.
+///
+/// # Safety
+///
+/// `out` is `capacity` writable bytes (null when `capacity` is zero).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_lib_interface_json(out: *mut u8, capacity: usize) -> i64 {
+    let json = text_at(exports() + 24);
+    // SAFETY: the caller's contract.
+    unsafe { copy_out(json.as_bytes(), out, capacity) };
+    i64::try_from(json.len()).unwrap_or(-1)
+}
+
 /// The hash of the whole exported interface: what generated bindings
 /// compare with their own before calling anything.
 #[unsafe(no_mangle)]
@@ -429,6 +502,9 @@ pub extern "C" fn baml_lib_interface_hash() -> u64 {
 /// during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_call_start(index: u64, args: *const Value, count: usize) -> u64 {
+    if !initialized() {
+        return 0;
+    }
     let Some(index) = usize::try_from(index)
         .ok()
         .filter(|index| *index < export_count())
@@ -471,11 +547,25 @@ pub unsafe extern "C" fn baml_lib_call_start(index: u64, args: *const Value, cou
     let task = host.worker().sched.new_task(TASK_STACK, shim);
     let id = host.next_call;
     host.next_call += 1;
+    let record = CallRecord {
+        id,
+        live: 1,
+        ..CallRecord::default()
+    };
+    let number = match host.free_calls.pop() {
+        Some(number) => {
+            host.calls[number] = record;
+            number
+        }
+        None => {
+            host.calls.push(record);
+            host.calls.len() - 1
+        }
+    };
     // SAFETY: a new task, this function's until it is queued.
     unsafe {
         (*task).entry = array;
-        (*task).wait_value = usize::try_from(id).expect("a call id fits a word");
-        (*task).flags |= TASK_HOST;
+        (*task).wait_value = number;
     }
     // Calls run in the order they were started: the queue is served from
     // its back.
@@ -509,11 +599,13 @@ pub extern "C" fn baml_rt_host_start(worker: &mut Mutator) -> Value {
 pub extern "C" fn baml_rt_host_finish(worker: &mut Mutator, tag: usize, payload: usize) {
     let task = worker.cur_task;
     // SAFETY: called on a task the host started.
-    let (call, flags) = unsafe { ((*task).wait_value as u64, (*task).flags) };
-    if flags & TASK_ABANDONED != 0 {
+    let record = unsafe { record_of(task) };
+    record.root_done = true;
+    if record.abandoned {
         // Reported stuck: the host has been told the call is over.
         return;
     }
+    let call = record.id;
     let value = Value {
         tag: tag & !THROWN,
         payload,
@@ -547,6 +639,9 @@ pub extern "C" fn baml_rt_host_finish(worker: &mut Mutator, tag: usize, payload:
 /// Not during a turn, nor with another call of this module running.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_turn() -> i64 {
+    if !initialized() {
+        return -1;
+    }
     let host = host_ptr();
     // SAFETY: the caller's contract. Only short references to the host's
     // state are made, none held across the run or a callback.
@@ -557,11 +652,11 @@ pub unsafe extern "C" fn baml_lib_turn() -> i64 {
         unsafe { run_until_parked(worker) };
         // SAFETY: as above; nothing here runs BAML or calls out.
         unsafe {
-            if (*host).failures {
-                take_unhandled(&mut *host, &mut unhandled);
-            }
             if stuck(&(*worker).sched) {
                 abandon_stuck(&mut *host);
+            }
+            if !(*host).to_report.is_empty() {
+                take_unhandled(&mut *host, &mut unhandled);
             }
         }
         // SAFETY: as above.
@@ -631,65 +726,45 @@ fn stuck(sched: &super::Sched) -> bool {
         && sched.held_up.iter().all(|(_, held_up)| held_up())
 }
 
-/// Report every call still in flight as stuck. Its tasks stay parked: one
-/// parked on I/O may still be named by the job it waits for, so it cannot
-/// be freed.
+/// Report every call still in flight as stuck, and its failures with it.
+/// Its tasks stay parked: one parked on I/O may still be named by the job
+/// it waits for, so it cannot be freed.
 fn abandon_stuck(host: &mut Host) {
-    // SAFETY: made at init and never freed.
-    let sched = unsafe { &(*host.worker).sched };
-    for task in sched.tasks() {
-        // SAFETY: a task in use.
-        unsafe {
-            let flags = (*task).flags;
-            if flags & TASK_HOST != 0
-                && flags & TASK_ABANDONED == 0
-                && (*task).state.load(std::sync::atomic::Ordering::Acquire) != DEAD
-            {
-                (*task).flags |= TASK_ABANDONED;
-                host.ended.push(Ended {
-                    call: (*task).wait_value as u64,
-                    status: STATUS_STUCK,
-                    value: Value::NULL,
-                });
+    for (number, record) in host.calls.iter_mut().enumerate() {
+        if record.live > 0 && !record.root_done && !record.abandoned {
+            record.abandoned = true;
+            host.ended.push(Ended {
+                call: record.id,
+                status: STATUS_STUCK,
+                value: Value::NULL,
+            });
+            if record.failed > 0 {
+                host.to_report.push(number);
             }
         }
     }
 }
 
-/// Take the error of every task that failed with nothing awaiting it and
-/// whose call has finished, as a value that crosses, and free the task.
-/// One whose call is still running may yet be awaited: it waits.
+/// Take the error of every failed task of the calls to report, as a value
+/// that crosses, and free the task. Nothing can await it any more: its
+/// call's last task has ended, or the call is stuck. Then free the records
+/// of the calls that have no task left.
 fn take_unhandled(host: &mut Host, unhandled: &mut Vec<(u64, Value)>) {
+    let reported = std::mem::take(&mut host.to_report);
     // SAFETY: made at init and never freed.
     let sched = unsafe { &mut (*host.worker).sched };
-    let in_flight = |call: usize| {
-        sched.tasks().any(|task| {
+    let failed: Vec<*mut Task> = sched
+        .tasks()
+        .filter(|&task| {
             // SAFETY: a task in use.
             unsafe {
-                (*task).flags & (TASK_HOST | TASK_ABANDONED) == TASK_HOST
-                    && (*task).wait_value == call
-                    && (*task).state.load(std::sync::atomic::Ordering::Acquire) != DEAD
+                (*task).flags & TASK_FAILED != 0
+                    && (*task).state.load(std::sync::atomic::Ordering::Acquire) == DEAD
+                    && reported.contains(&(*task).wait_value)
             }
         })
-    };
-    let mut waiting = false;
-    let mut done = Vec::new();
-    for task in sched.tasks() {
-        // SAFETY: a task in use.
-        unsafe {
-            if (*task).flags & TASK_FAILED == 0
-                || (*task).state.load(std::sync::atomic::Ordering::Acquire) != DEAD
-            {
-                continue;
-            }
-            if in_flight((*task).wait_value) {
-                waiting = true;
-            } else {
-                done.push(task);
-            }
-        }
-    }
-    for task in done {
+        .collect();
+    for task in failed {
         // SAFETY: a failed task that has ended, whose future holds its
         // error, and which is not the task the worker left last (a turn
         // has settled that one).
@@ -701,12 +776,20 @@ fn take_unhandled(host: &mut Host, unhandled: &mut Vec<(u64, Value)>) {
                 load(future + FUTURE_FLAGS) | FUTURE_OBSERVED,
             );
             store(future + FUTURE_TASK, 0);
-            let call = (*task).wait_value as u64;
+            let record = &mut host.calls[(*task).wait_value];
+            record.failed -= 1;
+            let call = record.id;
             sched.release(task);
             unhandled.push((call, values::crossing(error)));
         }
     }
-    host.failures = waiting;
+    for number in reported {
+        let record = &mut host.calls[number];
+        if record.live == 0 {
+            *record = CallRecord::default();
+            host.free_calls.push(number);
+        }
+    }
 }
 
 /// The loop of `serve`, which returns where `serve` would sleep.
@@ -753,6 +836,9 @@ unsafe fn run_until_parked(worker: *mut Mutator) {
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_debug_task_count() -> u64 {
+    if !initialized() {
+        return 0;
+    }
     // SAFETY: the caller's contract.
     let host = unsafe { host() };
     host.worker().sched.tasks().count() as u64
@@ -767,6 +853,9 @@ pub unsafe extern "C" fn baml_lib_debug_task_count() -> u64 {
 /// during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_string_new(text: *const u8, length: usize) -> u64 {
+    if !initialized() {
+        return 0;
+    }
     // SAFETY: the caller's contract.
     let bytes = unsafe { items(text, length) };
     let Ok(text) = std::str::from_utf8(bytes) else {
@@ -796,6 +885,9 @@ pub unsafe extern "C" fn baml_lib_string_new(text: *const u8, length: usize) -> 
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_handle_tag(handle: u64) -> u64 {
+    if !initialized() {
+        return u64::MAX;
+    }
     table::get(handle).map_or(u64::MAX, |value| value.tag as u64)
 }
 
@@ -816,6 +908,9 @@ fn string_of(handle: u64) -> Result<&'static str, String> {
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_string_len(handle: u64) -> i64 {
+    if !initialized() {
+        return -1;
+    }
     match string_of(handle) {
         Ok(text) => i64::try_from(text.len()).unwrap_or(-1),
         Err(why) => refuse(why, -1),
@@ -832,6 +927,9 @@ pub unsafe extern "C" fn baml_lib_string_len(handle: u64) -> i64 {
 /// during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_string_copy(handle: u64, out: *mut u8, capacity: usize) -> i64 {
+    if !initialized() {
+        return -1;
+    }
     match string_of(handle) {
         Ok(text) => {
             // SAFETY: the caller's contract.
@@ -852,6 +950,9 @@ pub unsafe extern "C" fn baml_lib_string_copy(handle: u64, out: *mut u8, capacit
 /// during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_describe(handle: u64, out: *mut u8, capacity: usize) -> i64 {
+    if !initialized() {
+        return -1;
+    }
     let Some(value) = table::get(handle) else {
         return refuse(format!("handle {handle} is not live"), -1);
     };
@@ -873,6 +974,9 @@ pub unsafe extern "C" fn baml_lib_describe(handle: u64, out: *mut u8, capacity: 
 /// during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_last_error(out: *mut u8, capacity: usize) -> i64 {
+    if !initialized() {
+        return -1;
+    }
     // SAFETY: the caller's contract.
     unsafe {
         let error = &host().error;
@@ -888,6 +992,9 @@ pub unsafe extern "C" fn baml_lib_last_error(out: *mut u8, capacity: usize) -> i
 /// Not during a turn. `handle` is not used again.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_handle_free(handle: u64) {
+    if !initialized() {
+        return;
+    }
     table::free(handle);
 }
 
@@ -898,6 +1005,9 @@ pub unsafe extern "C" fn baml_lib_handle_free(handle: u64) {
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_collect() {
+    if !initialized() {
+        return;
+    }
     // SAFETY: the caller's contract.
     let worker = unsafe { host().worker() };
     worker.clear_anchor();
@@ -912,6 +1022,9 @@ pub unsafe extern "C" fn baml_lib_collect() {
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_debug_address(handle: u64) -> u64 {
+    if !initialized() {
+        return 0;
+    }
     table::get(handle).map_or(0, |value| value.payload as u64)
 }
 
@@ -922,5 +1035,8 @@ pub unsafe extern "C" fn baml_lib_debug_address(handle: u64) -> u64 {
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_debug_handle_count() -> u64 {
+    if !initialized() {
+        return 0;
+    }
     table::live() as u64
 }

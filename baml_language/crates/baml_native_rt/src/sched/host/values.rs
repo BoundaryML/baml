@@ -15,13 +15,13 @@
 //! It is accepted as an input once, right after it is made
 //! ([`table::FRESH`]), so no container lands in two typed places.
 
-use super::{HANDLE_BIT, host, items, refuse, table};
+use super::{HANDLE_BIT, host, initialized, items, refuse, table};
 use crate::{
     heap::{Value, load},
     layout::{
         ARRAY_LENGTH, ARRAY_PTR, INSTANCE_CLASS, STORAGE_ELEMENTS, STRING_TAGS_END, TAG_ARRAY,
-        TAG_ENUM_VARIANT, TAG_INSTANCE, TAG_MAP, TAG_OMITTED, TAG_STRING, TYPE_ID_MASK, VALUE,
-        VARIANT_ENUM, VARIANT_INDEX, is_pointer,
+        TAG_BOOL, TAG_ENUM_VARIANT, TAG_INSTANCE, TAG_MAP, TAG_NULL, TAG_OMITTED, TAG_STRING,
+        TYPE_ID_MASK, VALUE, VARIANT_ENUM, VARIANT_INDEX, is_pointer,
     },
 };
 
@@ -58,6 +58,19 @@ pub(super) fn resolve(value: Value, omitted: bool) -> Result<Value, String> {
         }
         if value.tag == TAG_OMITTED && !omitted {
             return Err("OMITTED where no default is declared".to_owned());
+        }
+        // A bool is 0 or 1, and null and OMITTED carry nothing: compiled
+        // code may compare the whole word.
+        let payload_ok = match value.tag {
+            TAG_BOOL => value.payload <= 1,
+            TAG_NULL | TAG_OMITTED => value.payload == 0,
+            _ => true,
+        };
+        if !payload_ok {
+            return Err(format!(
+                "a scalar of tag {} with payload {:#x}",
+                value.tag, value.payload
+            ));
         }
         return Ok(value);
     }
@@ -172,6 +185,9 @@ unsafe fn answer(out: *mut Value, value: Result<Value, String>) -> i32 {
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_class_of(handle: u64) -> i64 {
+    if !initialized() {
+        return -1;
+    }
     let Some(value) = table::get(handle) else {
         return refuse(format!("handle {handle} is not live"), -1);
     };
@@ -199,6 +215,9 @@ pub unsafe extern "C" fn baml_lib_class_of(handle: u64) -> i64 {
 /// `out` is writable. Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_field_get(handle: u64, field: u32, out: *mut Value) -> i32 {
+    if !initialized() {
+        return -1;
+    }
     let value = (|| {
         let instance = object(handle, TAG_INSTANCE)?;
         // SAFETY: as above; an instance has its class object.
@@ -229,6 +248,9 @@ pub unsafe extern "C" fn baml_lib_field_get(handle: u64, field: u32, out: *mut V
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_array_len(handle: u64) -> i64 {
+    if !initialized() {
+        return -1;
+    }
     match object(handle, TAG_ARRAY) {
         // SAFETY: a live array.
         Ok(array) => i64::try_from(unsafe { load(array + ARRAY_LENGTH) }).unwrap_or(-1),
@@ -244,6 +266,9 @@ pub unsafe extern "C" fn baml_lib_array_len(handle: u64) -> i64 {
 /// `out` is writable. Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_array_get(handle: u64, index: u64, out: *mut Value) -> i32 {
+    if !initialized() {
+        return -1;
+    }
     let value = object(handle, TAG_ARRAY).and_then(|array| {
         // SAFETY: a live array, whose storage holds its length of values.
         unsafe {
@@ -267,6 +292,9 @@ pub unsafe extern "C" fn baml_lib_array_get(handle: u64, index: u64, out: *mut V
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_map_len(handle: u64) -> i64 {
+    if !initialized() {
+        return -1;
+    }
     match object(handle, TAG_MAP) {
         // SAFETY: a live map.
         Ok(map) => i64::try_from(unsafe { crate::map::len(map) }).unwrap_or(-1),
@@ -289,6 +317,9 @@ pub unsafe extern "C" fn baml_lib_map_next(
     key: *mut Value,
     value: *mut Value,
 ) -> i64 {
+    if !initialized() {
+        return -2;
+    }
     let map = match object(handle, TAG_MAP) {
         Ok(map) => map,
         Err(why) => return refuse(why, -2),
@@ -313,6 +344,9 @@ pub unsafe extern "C" fn baml_lib_map_next(
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_variant_index(handle: u64) -> i64 {
+    if !initialized() {
+        return -1;
+    }
     match object(handle, TAG_ENUM_VARIANT) {
         // SAFETY: a variant's object.
         Ok(variant) => i64::try_from(unsafe { load(variant + VARIANT_INDEX) }).unwrap_or(-1),
@@ -328,6 +362,9 @@ pub unsafe extern "C" fn baml_lib_variant_index(handle: u64) -> i64 {
 /// `out` is writable. Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_variant(enumeration: u32, index: u32, out: *mut Value) -> i32 {
+    if !initialized() {
+        return -1;
+    }
     let value = (|| {
         // SAFETY: the caller's contract.
         let host = unsafe { host() };
@@ -368,6 +405,9 @@ pub unsafe extern "C" fn baml_lib_instance_new(
     count: usize,
     bad_field: *mut i32,
 ) -> u64 {
+    if !initialized() {
+        return 0;
+    }
     // SAFETY: the caller's contract.
     let values = unsafe { items(fields, count) };
     let blame = |field: i32| {
@@ -457,6 +497,9 @@ pub unsafe extern "C" fn baml_lib_instance_new(
 /// during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_array_new(values: *const Value, count: usize) -> u64 {
+    if !initialized() {
+        return 0;
+    }
     // SAFETY: the caller's contract.
     let values = unsafe { items(values, count) };
     let used = match containers(values).and_then(|used| {
@@ -516,6 +559,9 @@ pub unsafe extern "C" fn baml_lib_map_new(
     values: *const Value,
     count: usize,
 ) -> u64 {
+    if !initialized() {
+        return 0;
+    }
     // SAFETY: the caller's contract.
     let (keys, values) = unsafe { (items(keys, count), items(values, count)) };
     let both: Vec<Value> = keys.iter().chain(values).copied().collect();

@@ -1,0 +1,28 @@
+[package]
+name = "baml_native_host"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+description = "Calling a BAML program compiled to a native library from Rust: loading it, futures over calls, copying values in and out"
+
+[lib]
+doctest = false
+
+[dependencies]
+indexmap = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+baml_compiler2_native = { workspace = true }
+baml_db = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = [ "macros", "rt-multi-thread", "time" ] }
+
+[lints]
+workspace = true
+
+[package.metadata.ci]
+wasm_support = false

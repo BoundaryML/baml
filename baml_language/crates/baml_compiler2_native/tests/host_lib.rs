@@ -36,6 +36,7 @@ const TAG_INT: u64 = 2;
 const TAG_OMITTED: u64 = 4;
 const TAG_STRING: u64 = 5;
 const TAG_STRING_SLICE: u64 = 6;
+const TAG_ARRAY: u64 = 10;
 const THROWN: u64 = 1 << 59;
 const HANDLE: u64 = 1 << 61;
 const BUSY: u64 = 1 << 63;
@@ -71,6 +72,8 @@ struct Lib {
     task_count: unsafe extern "C" fn() -> u64,
     array_len: unsafe extern "C" fn(u64) -> i64,
     last_error: unsafe extern "C" fn(*mut u8, usize) -> i64,
+    array_new: unsafe extern "C" fn(*const Value, usize) -> u64,
+    instance_new: unsafe extern "C" fn(u32, *const Value, usize, *mut i32) -> u64,
 }
 
 /// How a call ended: its status and value.
@@ -108,9 +111,12 @@ unsafe extern "C" fn on_unhandled(_ctx: *mut c_void, call: u64, tag: u64, payloa
 unsafe extern "C" fn wake(_ctx: *mut c_void) {}
 
 /// The fixture as a library, compiled, linked, loaded and initialized once.
-fn lib() -> &'static Lib {
-    static LIB: OnceLock<Lib> = OnceLock::new();
-    LIB.get_or_init(|| {
+fn library_path() -> &'static std::path::Path {
+    static PATH: OnceLock<std::path::PathBuf> = OnceLock::new();
+    PATH.get_or_init(|| {
+        if let Some(path) = std::env::var_os("HOST_LIB_TEST_LIBRARY") {
+            return path.into();
+        }
         let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/host_lib");
         let path = directory.join("fixture.baml");
         let text = std::fs::read_to_string(&path).expect("the fixture");
@@ -131,17 +137,34 @@ fn lib() -> &'static Lib {
         let out = tempfile::tempdir().expect("a temporary directory").keep();
         let library = out.join("libfixture.dylib");
         link_library(&compiled.object, &library).expect("the fixture links");
-        let library = CString::new(library.to_str().expect("UTF-8")).expect("a path");
+        library
+    })
+}
+
+/// Open the library and look up `name` in it.
+///
+/// # Safety
+///
+/// `name` is a function of the library, transmuted by the caller to its
+/// type.
+unsafe fn symbol(name: &str) -> *mut c_void {
+    let library = CString::new(library_path().to_str().expect("UTF-8")).expect("a path");
+    // SAFETY: a library path; opening it again returns the same library.
+    unsafe {
+        let handle = dlopen(library.as_ptr(), 2);
+        assert!(!handle.is_null(), "the library loads");
+        let name = CString::new(name).expect("a name");
+        let address = dlsym(handle, name.as_ptr());
+        assert!(!address.is_null(), "{name:?} is exported");
+        address
+    }
+}
+
+fn lib() -> &'static Lib {
+    static LIB: OnceLock<Lib> = OnceLock::new();
+    LIB.get_or_init(|| {
         // SAFETY: a library with the `baml_lib_*` functions of these types.
         unsafe {
-            let handle = dlopen(library.as_ptr(), 2);
-            assert!(!handle.is_null(), "the library loads");
-            let symbol = |name: &str| {
-                let name = CString::new(name).expect("a name");
-                let address = dlsym(handle, name.as_ptr());
-                assert!(!address.is_null(), "{name:?} is exported");
-                address
-            };
             let init: unsafe extern "C" fn(*const Callbacks) -> i32 =
                 std::mem::transmute(symbol("baml_lib_init"));
             let mut callbacks = Callbacks {
@@ -171,6 +194,8 @@ fn lib() -> &'static Lib {
                 task_count: std::mem::transmute(symbol("baml_lib_debug_task_count")),
                 array_len: std::mem::transmute(symbol("baml_lib_array_len")),
                 last_error: std::mem::transmute(symbol("baml_lib_last_error")),
+                array_new: std::mem::transmute(symbol("baml_lib_array_new")),
+                instance_new: std::mem::transmute(symbol("baml_lib_instance_new")),
             }
         }
     })
@@ -264,7 +289,13 @@ impl Lib {
         let mut buffer = vec![0_u8; 256];
         // SAFETY: a buffer of its length.
         let length = unsafe { (self.describe)(handle, buffer.as_mut_ptr(), buffer.len()) };
-        buffer.truncate(usize::try_from(length).expect("a live handle"));
+        let length = usize::try_from(length).expect("a live handle");
+        if length > buffer.len() {
+            buffer.resize(length, 0);
+            // SAFETY: as above.
+            unsafe { (self.describe)(handle, buffer.as_mut_ptr(), buffer.len()) };
+        }
+        buffer.truncate(length);
         String::from_utf8(buffer).expect("UTF-8")
     }
 
@@ -475,4 +506,210 @@ fn a_handle_of_the_wrong_kind_is_refused() {
     );
     // SAFETY: as above.
     assert_eq!(unsafe { (lib.array_len)(u64::MAX) }, -1, "no such handle");
+}
+
+impl Lib {
+    /// One turn; what ended in it.
+    fn turn_once(&self) -> HashMap<u64, Ending> {
+        // SAFETY: one test at a time.
+        unsafe { (self.turn)() };
+        std::mem::take(
+            ENDED
+                .lock()
+                .expect("no test panicked holding it")
+                .get_or_insert_default(),
+        )
+    }
+}
+
+/// Review findings 4 and 9a: a failed task is reported only once the last
+/// task of its call has ended. Here a sibling awaits it after the call has
+/// returned: it takes the error, and nothing is reported.
+#[test]
+fn a_failure_a_sibling_awaits_is_not_reported() {
+    let (_turn, lib) = take_turns();
+    let before = lib.tasks();
+    assert_eq!(lib.finish(lib.start("sibling_awaits", &[])), int(1));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while lib.tasks() != before {
+        assert!(Instant::now() < deadline, "the call's tasks end");
+        lib.turn_once();
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(
+        UNHANDLED.lock().expect("no test panicked").is_empty(),
+        "the sibling took the error"
+    );
+}
+
+/// Review finding 5: a failure inside a call found stuck is reported in
+/// the turn that reports the call stuck.
+#[test]
+fn a_failure_inside_a_stuck_call_is_reported_with_it() {
+    let (_turn, lib) = take_turns();
+    let call = lib.start("stuck_with_failure", &[]);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let ended = lib.turn_once();
+        if let Some(ending) = ended.get(&call) {
+            assert_eq!(ending.status, STATUS_STUCK);
+            break;
+        }
+        assert!(Instant::now() < deadline, "the call is reported stuck");
+    }
+    let reported = std::mem::take(&mut *UNHANDLED.lock().expect("no test panicked"));
+    assert_eq!(reported.len(), 1, "reported in the same turn");
+    assert_eq!(reported[0].0, call);
+    assert_eq!(lib.text(reported[0].1.payload), "boom");
+    lib.free(reported[0].1);
+}
+
+/// Review finding 7: describing a value that holds itself ends.
+#[test]
+fn describing_a_value_that_holds_itself_ends() {
+    let (_turn, lib) = take_turns();
+    let ending = lib.end(lib.start("throw_loop", &[]));
+    assert_eq!(ending.status, STATUS_THREW);
+    let text = lib.describe(ending.value.payload);
+    assert!(text.contains("<nested too deep>"), "{text}");
+    lib.free(ending.value);
+}
+
+/// Review finding 6: a bool is 0 or 1, and null carries nothing.
+#[test]
+fn scalar_payloads_are_checked() {
+    let (_turn, lib) = take_turns();
+    let bad_bool = Value { tag: 1, payload: 2 };
+    assert_eq!(lib.start("is_true", &[bad_bool]), 0);
+    assert!(lib.last_error().contains("payload"), "{}", lib.last_error());
+    let good_bool = Value { tag: 1, payload: 1 };
+    assert_eq!(lib.finish(lib.start("is_true", &[good_bool])), good_bool);
+    let bad_null = Value { tag: 0, payload: 1 };
+    assert_eq!(lib.start("takes_null", &[bad_null]), 0);
+    let good_null = Value { tag: 0, payload: 0 };
+    assert_eq!(lib.finish(lib.start("takes_null", &[good_null])), int(1));
+}
+
+/// A call waiting on a timer, or on I/O, is not stuck.
+#[test]
+fn a_call_waiting_on_a_timer_or_io_is_not_stuck() {
+    let (_turn, lib) = take_turns();
+    let napping = lib.start("nap", &[int(30)]);
+    let ended = lib.turn_once();
+    assert!(
+        !ended.contains_key(&napping),
+        "a timer is pending: {ended:?}"
+    );
+    assert_eq!(lib.finish(napping), int(30));
+    let home = lib.string("HOME");
+    let fallback = lib.string("?");
+    let reading = lib.start("env_or", &[home, fallback]);
+    if let Some(ending) = lib.turn_once().get(&reading) {
+        assert_eq!(ending.status, STATUS_RETURNED, "I/O in flight is not stuck");
+        lib.free(ending.value);
+    } else {
+        let value = lib.finish(reading);
+        lib.free(value);
+    }
+    lib.free(home);
+    lib.free(fallback);
+}
+
+/// Review finding 11: a function called before `init` refuses; it does not
+/// abort. Run in a process of its own, where nothing has called `init`.
+#[test]
+fn calls_before_init_are_refused() {
+    let output = std::process::Command::new(std::env::current_exe().expect("the test binary"))
+        .args([
+            "--exact",
+            "calls_before_init_in_a_fresh_process",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env("HOST_LIB_TEST_LIBRARY", library_path())
+        .output()
+        .expect("the test binary runs");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+#[ignore = "run by calls_before_init_are_refused, in a process of its own"]
+fn calls_before_init_in_a_fresh_process() {
+    // SAFETY: the library's functions, with their types; nothing has called
+    // `init` in this process.
+    unsafe {
+        let call_start: unsafe extern "C" fn(u64, *const Value, usize) -> u64 =
+            std::mem::transmute(symbol("baml_lib_call_start"));
+        let turn: unsafe extern "C" fn() -> i64 = std::mem::transmute(symbol("baml_lib_turn"));
+        let string_new: unsafe extern "C" fn(*const u8, usize) -> u64 =
+            std::mem::transmute(symbol("baml_lib_string_new"));
+        let array_len: unsafe extern "C" fn(u64) -> i64 =
+            std::mem::transmute(symbol("baml_lib_array_len"));
+        let handle_free: unsafe extern "C" fn(u64) =
+            std::mem::transmute(symbol("baml_lib_handle_free"));
+        let last_error: unsafe extern "C" fn(*mut u8, usize) -> i64 =
+            std::mem::transmute(symbol("baml_lib_last_error"));
+        assert_eq!(call_start(0, std::ptr::null(), 0), 0);
+        assert_eq!(turn(), -1);
+        assert_eq!(string_new(b"x".as_ptr(), 1), 0);
+        assert_eq!(array_len(1), -1);
+        handle_free(1);
+        assert_eq!(last_error(std::ptr::null_mut(), 0), -1);
+    }
+}
+
+impl Lib {
+    /// A fresh array of `values`, as a value that crosses.
+    fn array(&self, values: &[Value]) -> Value {
+        // SAFETY: `values` is its length of values.
+        let handle = unsafe { (self.array_new)(values.as_ptr(), values.len()) };
+        assert_ne!(handle, 0, "{}", self.last_error());
+        Value {
+            tag: TAG_ARRAY | HANDLE,
+            payload: handle,
+        }
+    }
+}
+
+/// One fresh array passed twice in one call, one instance or one array is
+/// refused: it would land in two places. A refused call takes nothing: its
+/// containers can still be passed. An array placed in another one cannot
+/// be passed again.
+#[test]
+fn one_array_lands_in_one_place_only() {
+    let (_turn, lib) = take_turns();
+    let a = lib.array(&[int(1), int(2)]);
+    let b = lib.array(&[int(3)]);
+    assert_eq!(lib.start("two_lists", &[a, a]), 0, "twice in one call");
+    assert!(
+        lib.last_error().contains("passed once"),
+        "{}",
+        lib.last_error()
+    );
+    let pair_class = 0;
+    // SAFETY: two values.
+    let pair = unsafe { (lib.instance_new)(pair_class, [a, a].as_ptr(), 2, std::ptr::null_mut()) };
+    assert_eq!(pair, 0, "twice in one instance");
+    // SAFETY: two values.
+    let outer = unsafe { (lib.array_new)([a, a].as_ptr(), 2) };
+    assert_eq!(outer, 0, "twice in one array");
+    // The refusals took nothing: both still pass, once each.
+    assert_eq!(lib.finish(lib.start("two_lists", &[a, b])), int(3));
+    assert_eq!(
+        lib.start("two_lists", &[a, lib.array(&[])]),
+        0,
+        "already passed"
+    );
+    // An array placed in another one is taken.
+    let inner = lib.array(&[]);
+    let holder = lib.array(&[inner]);
+    assert_eq!(lib.start("two_lists", &[inner, lib.array(&[])]), 0);
+    for value in [a, b, inner, holder] {
+        lib.free(value);
+    }
 }

@@ -73,3 +73,68 @@ function boom_export(n: int) -> int {
 function greet_default(name: string = "you") -> string {
   "hi " + name
 }
+
+class Node {
+  name string
+  next Node?
+}
+
+// Throws an instance whose field is the instance itself.
+function throw_loop() -> int {
+  let n = Node { name: "loop", next: null };
+  n.next = n;
+  throw n;
+}
+
+// A sibling awaits the failed task after the call has returned: the
+// failure has someone to take it, and is never reported unhandled.
+function sibling_awaits() -> int {
+  let t = spawn { boom(5) };
+  let w = spawn {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(10));
+    (await t) catch (e) {
+      _ => 7,
+    }
+  };
+  1
+}
+
+// A task fails, then the call can never finish.
+function stuck_with_failure() -> int {
+  let t = spawn { boom(6) };
+  let s = baml.sync.Semaphore.new(1);
+  let p = s.acquire();
+  let q = s.acquire();
+  1
+}
+
+function nap(milliseconds: int) -> int {
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(milliseconds));
+  milliseconds
+}
+
+function env_or(name: string, fallback: string) -> string {
+  let value = baml.env.get(name);
+  if (value != null) { value } else { fallback }
+}
+
+function is_true(b: bool) -> bool {
+  b
+}
+
+function takes_null(x: null) -> int {
+  1
+}
+
+class Pair {
+  a int[]
+  b int[]
+}
+
+function pair_total(p: Pair) -> int {
+  p.a.length() + p.b.length()
+}
+
+function two_lists(a: int[], b: int[]) -> int {
+  a.length() + b.length()
+}
