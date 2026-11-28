@@ -513,10 +513,10 @@ impl<'db> InferenceContext<'db> {
 
     /// [`Self::lower_pattern`] for a pattern that only part of the scrutinee
     /// can reach: `reaching` is the scrutinee minus the members that earlier
-    /// `match` arms consumed. A pattern that writes no type of its own (`_`,
-    /// a bare `let name`, a chain of bare bindings) takes whatever reaches
-    /// it, so `reaching` is its type. Every other pattern is typed by what
-    /// it writes, against `scrut`.
+    /// `match` arms consumed or values of a bool/enum member. A pattern that
+    /// writes no type of its own (`_`, a bare `let name`, a chain of bare
+    /// bindings) takes whatever reaches it, so `reaching` is its type. Every
+    /// other pattern is typed by what it writes, against `scrut`.
     pub(super) fn lower_pattern_reaching(
         &mut self,
         body: &ExprBody,
@@ -527,11 +527,24 @@ impl<'db> InferenceContext<'db> {
         debug_assert!(
             reaching == scrut || {
                 let members = scrut_members(scrut);
-                scrut_members(reaching).into_iter().all(|member| {
-                    matches!(member.kind(), InferTy::Never) || members.contains(&member)
-                })
+                scrut_members(reaching)
+                    .into_iter()
+                    .all(|member| match member.kind() {
+                        InferTy::Never => true,
+                        InferTy::EnumVariant(qtn, _) => {
+                            members.contains(&member)
+                                || members
+                                    .iter()
+                                    .any(|m| matches!(m.kind(), InferTy::Enum(q) if q == qtn))
+                        }
+                        InferTy::Literal(baml_base::Literal::Bool(_), _) => {
+                            members.contains(&member)
+                                || members.iter().any(|m| matches!(m.kind(), InferTy::Bool))
+                        }
+                        _ => members.contains(&member),
+                    })
             },
-            "`reaching` must be made of members of the scrutinee",
+            "`reaching` must be made of members of the scrutinee or values of a bool/enum member",
         );
         let outcome = self.lower_pattern_inner(body, pat, scrut, reaching);
         // Every pattern node records its type (TIR's pattern_types
