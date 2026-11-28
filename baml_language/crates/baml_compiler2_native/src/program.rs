@@ -221,6 +221,15 @@ pub(crate) fn collect<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     entry: FunctionLoc<'db>,
 ) -> Program<'db> {
+    collect_all(db, &[entry])
+}
+
+/// [`collect`] from several roots: the functions a library exports, which
+/// come first in `functions`, in the order given.
+pub(crate) fn collect_all<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    entries: &[FunctionLoc<'db>],
+) -> Program<'db> {
     let mut program = Program {
         functions: Vec::new(),
         index: HashMap::new(),
@@ -232,10 +241,13 @@ pub(crate) fn collect<'db>(
         equals: Vec::new(),
         equals_unlisted: Vec::new(),
     };
-    let mut queue = VecDeque::from([Needed {
-        key: FnKey::new(entry, Entry::Direct),
-        captures: Vec::new(),
-    }]);
+    let mut queue: VecDeque<Needed<'db>> = entries
+        .iter()
+        .map(|entry| Needed {
+            key: FnKey::new(*entry, Entry::Direct),
+            captures: Vec::new(),
+        })
+        .collect();
     // Each dispatched method, and what it runs on each type an interface
     // value can hold. An implementation is itself a function to compile,
     // which can make more types and dispatch more methods.

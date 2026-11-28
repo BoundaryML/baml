@@ -12,6 +12,7 @@ Each document describes one part of the native backend as it is built: how it wo
 | `tasks.md` | The task record and switch frame, `spawn`, `await`, parking on timers, futures and I/O, the wake from the I/O thread. |
 | `threads.md` | Which OS threads exist, per-worker state, what migration stress checks, and the list of everything that assumes one worker, with file and line. |
 | `startup-and-size.md` | Instructions before the first line of user code, where they go, and binary sizes. |
+| `bridges.md` | Calling compiled BAML from Python, Node and Rust: the library form, the exported C functions, handles, how a call starts and finishes, and why results are copied. |
 
 ## How the numbers were measured
 

@@ -39,7 +39,7 @@ pub mod unwind;
 
 use std::io::Write;
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "host-lib")))]
 use heap::{Mutator, Program};
 
 /// The exit status of a program that ended in an uncaught panic, matching
@@ -48,15 +48,15 @@ const UNCAUGHT_EXIT_STATUS: i32 = 1;
 
 /// Set in the environment to collect on every allocation.
 #[cfg(not(test))]
-const GC_STRESS_VARIABLE: &str = "BAML_GC_STRESS";
+pub(crate) const GC_STRESS_VARIABLE: &str = "BAML_GC_STRESS";
 
 /// Set in the environment to have every task that stops go on on another
 /// thread and under a worker at another address: see
 /// `sched::serve_in_turns`. Only the runtime a test build links can.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "host-lib")))]
 const MIGRATE_STRESS_VARIABLE: &str = "BAML_MIGRATE_STRESS";
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "host-lib")))]
 unsafe extern "C" {
     /// Defined by the compiled program: what its first task starts in. It
     /// runs the entry function and prints the result.
@@ -75,7 +75,7 @@ unsafe extern "C" {
     static baml_native_functions: usize;
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "host-lib")))]
 unsafe extern "C" {
     fn signal(signal: i32, handler: usize) -> usize;
     fn _exit(status: i32) -> !;
@@ -83,26 +83,27 @@ unsafe extern "C" {
 
 /// The two signals that ask a program to stop, the same number on every
 /// system the runtime is built for.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "host-lib")))]
 const SIGINT: i32 = 2;
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "host-lib")))]
 const SIGTERM: i32 = 15;
 /// The disposition of a signal that is ignored.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "host-lib")))]
 const SIG_IGN: usize = 1;
 
 /// End the process as a shell reports a death by `signal`: with 128 more
 /// than its number. Async-signal-safe: it calls `_exit` alone. Nothing
 /// written to stdout is lost, since every write to it flushes before it
 /// returns.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "host-lib")))]
 extern "C" fn stopped(signal: i32) {
     // SAFETY: `_exit` may be called from a signal handler.
     unsafe { _exit(128 + signal) }
 }
 
-/// Process entry point.
-#[cfg(not(test))]
+/// Process entry point. A library build (`host-lib`) has none: the host
+/// calls the `baml_lib_*` functions of [`sched::host`] instead.
+#[cfg(not(any(test, feature = "host-lib")))]
 #[unsafe(no_mangle)]
 pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
     for stop in [SIGINT, SIGTERM] {

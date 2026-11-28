@@ -736,6 +736,15 @@ impl Mutator {
         };
     }
 
+    /// Forget the top compiled frame: for an allocation made with no task
+    /// running, from a host program between turns, whose collection must
+    /// walk no stack but those of the tasks that are not running. The
+    /// anchor a task's last runtime call left is stale by then.
+    #[cfg(all(feature = "host-lib", not(test)))]
+    pub(crate) fn clear_anchor(&mut self) {
+        self.anchor = Anchor::default();
+    }
+
     /// Record the top of the running task's compiled frames, given the
     /// switch frame a stub built when compiled code called it: the frame
     /// record is inside it and the caller's stack pointer just above it.
@@ -947,6 +956,9 @@ impl Mutator {
                     copy.forward_value(slot & !ROOT_IS_VALUE);
                 }
             }
+            // In the library form, the objects the host holds.
+            #[cfg(all(feature = "host-lib", not(test)))]
+            crate::sched::host::each_slot(&mut |slot| copy.forward_value(slot));
             copy.finish();
         }
         // An owned value whose object was not copied is dropped, and one

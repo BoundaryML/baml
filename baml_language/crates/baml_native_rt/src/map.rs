@@ -736,6 +736,32 @@ pub unsafe fn for_each(map: usize, mut each: impl FnMut(Value, Value)) {
     }
 }
 
+/// The first entry of the map at `map` whose record is numbered `from`
+/// or more, in the order the keys were first set: its number, key and
+/// value. For a host reading a map one entry at a time.
+///
+/// # Safety
+///
+/// `map` is a live map.
+#[cfg(all(feature = "host-lib", not(test)))]
+pub(crate) unsafe fn entry_from(map: usize, from: usize) -> Option<(usize, Value, Value)> {
+    // SAFETY: the caller's contract and the layout.
+    unsafe {
+        let (used, entries) = used(map);
+        let capacity = load(entries + ENTRIES_CAPACITY);
+        (from..used)
+            .find(|number| read32(hash_slot(entries, capacity, *number)) != 0)
+            .map(|number| {
+                let at = record(entries, number);
+                (
+                    number,
+                    Value::load(at + ENTRY_KEY),
+                    Value::load(at + ENTRY_VALUE),
+                )
+            })
+    }
+}
+
 crate::stubs::anchored! {
     /// The symbol of [`map_new`].
     baml_rt_map_new => map_new

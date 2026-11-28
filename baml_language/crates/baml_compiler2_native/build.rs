@@ -64,13 +64,17 @@ fn main() {
     // The runtime is built four times: without `baml.http` for the
     // programs that call none of it and with it for the others, and each
     // of those again with the checks a test build links.
-    for (variant, with_http, checked) in [
-        ("", false, false),
-        ("_HTTP", true, false),
-        ("_CHECKED", false, true),
-        ("_HTTP_CHECKED", true, true),
+    // A fifth is the library form a host program loads (`host-lib`): no
+    // `main`, lean, without `baml.http`.
+    for (variant, with_http, checked, library) in [
+        ("", false, false, false),
+        ("_HTTP", true, false, false),
+        ("_CHECKED", false, true, false),
+        ("_HTTP_CHECKED", true, true, false),
+        ("_LIB", false, false, true),
     ] {
-        let (archive, native_libs) = build_runtime(&runtime_dir, &out_dir, with_http, checked);
+        let (archive, native_libs) =
+            build_runtime(&runtime_dir, &out_dir, with_http, checked, library);
         println!(
             "cargo:rustc-env=BAML_NATIVE_RT{variant}_ARCHIVE={}",
             archive.display()
@@ -109,6 +113,7 @@ fn build_runtime(
     out_dir: &Path,
     with_http: bool,
     checked: bool,
+    library: bool,
 ) -> (PathBuf, String) {
     let cargo = env::var_os("CARGO").expect("set by cargo");
     let target = env::var("TARGET").expect("set by cargo");
@@ -131,6 +136,9 @@ fn build_runtime(
     }
     if checked {
         command.args(["--features", "checks"]);
+    }
+    if library {
+        command.args(["--features", "host-lib"]);
     }
     let mut artifact_dir = target_dir;
     if target != host {
@@ -160,6 +168,7 @@ fn build_runtime(
         built.display()
     );
     let archive = built.with_file_name(match (with_http, checked) {
+        _ if library => "libbaml_native_rt_lib.a",
         (false, false) => "libbaml_native_rt_plain.a",
         (true, false) => "libbaml_native_rt_http.a",
         (false, true) => "libbaml_native_rt_plain_checked.a",
