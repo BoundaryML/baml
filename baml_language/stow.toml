@@ -127,7 +127,8 @@ approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "
 # `native_rt` is the runtime archive natively compiled programs link against.
 # `native_host` is what Rust code calls a natively compiled library through.
 # `native_python` is the Python module over it.
-approved_suffixes = ["artifact", "compiler2_hir_ty", "native_host", "native_python", "native_rt", "project_root", "test_support"]
+# `native_node` is the Node addon over it.
+approved_suffixes = ["artifact", "compiler2_hir_ty", "native_host", "native_node", "native_python", "native_rt", "project_root", "test_support"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]
 # The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring

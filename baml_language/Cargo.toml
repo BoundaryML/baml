@@ -77,7 +77,6 @@ bcs_api = { path = "crates/bcs_api", default-features = false }
 btel_bcs = { path = "crates/btel_bcs", default-features = false }
 btel_snapshot = { path = "crates/btel_snapshot" }
 bex_str = { path = "crates/bex_str" }
-baml_native_host = { path = "crates/baml_native_host" }
 baml_base = { path = "crates/baml_base" }
 baml_artifact = { path = "crates/baml_artifact" }
 baml_linker = { path = "crates/baml_linker" }
@@ -109,6 +108,8 @@ baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_rust = { path = "crates/baml_compiler2_rust" }
 baml_compiler2_native = { path = "crates/baml_compiler2_native" }
+baml_native_host = { path = "crates/baml_native_host" }
+sdk_test_codegen = { path = "sdk_tests/codegen" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 bex_cache = { path = "crates/bex_cache", default-features = false }
@@ -347,6 +348,7 @@ pyo3-stub-gen = { version = "0.22", default-features = false }
 napi = { version = "3.9.0", default-features = false }
 napi-derive = "3.5.6"
 napi-build = "2.3.2"
+napi-sys = { version = "3.2.1", default-features = false }
 windows-sys = "0.61.2"
 wiremock = "0.6"
 vfs = "0.12"

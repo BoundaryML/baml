@@ -3,8 +3,8 @@
 # under target/native_python/:
 #
 #   libtype_shapes.dylib  the type-shapes fixture plus `bridge_test`
-#                         (this directory's bridge_test.baml), every function
-#                         that packs
+#                         (baml_native_host/tests/type_shapes/bridge_test.baml),
+#                         every function that packs
 #   vm/baml_sdk           today's generated package for the same sources
 #   native/baml_sdk       the same package over the native library: the lines
 #                         listed below are the only ones that change
@@ -21,9 +21,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"   # baml_language
 WORK="$ROOT/target/native_python"
 FIXTURE="$ROOT/sdk_tests/fixtures/type_shapes/baml_src"
-# The host crate's `bridge_test` plus the functions the Python tests add
-# (the first part is a copy of baml_native_host/tests/type_shapes/bridge_test.baml).
-BRIDGE_TEST="$HERE/bridge_test.baml"
+# The one `bridge_test` the Rust, Python and Node tests share.
+BRIDGE_TEST="$ROOT/crates/baml_native_host/tests/type_shapes/bridge_test.baml"
 GENERATED="$ROOT/sdk_tests/crates/python_pydantic2/type_shapes/generated"
 CUSTOMIZABLE="$ROOT/sdk_tests/crates/python_pydantic2/type_shapes/customizable"
 mkdir -p "$WORK"

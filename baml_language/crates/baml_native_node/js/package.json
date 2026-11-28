@@ -1,0 +1,18 @@
+{
+  "name": "@boundaryml/baml-native-bridge",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The runtime generated TypeScript SDKs import as @boundaryml/baml-bridge, over a BAML program compiled to a native library",
+  "type": "module",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js"
+    },
+    "./native": {
+      "types": "./native.d.ts",
+      "import": "./native.js"
+    }
+  }
+}
