@@ -17,7 +17,7 @@ http_bodies = false
 on_initial_telemetry_failure = "ignore"
 
 [pack.build]
-embed_telemetry_env = "Production"
+embed_telemetry_env = "production"
 embed_telemetry_api_key_from_env_var = "BAML_WRAPPER_BOUNDARY_API_KEY"
 
 [pack.env_var_names]

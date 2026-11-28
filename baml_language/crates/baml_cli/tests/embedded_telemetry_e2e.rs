@@ -1776,6 +1776,39 @@ async fn embedding_matches_project_names_with_internal_spaces_exactly() {
     ));
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn embedding_matches_environment_names_in_any_ascii_case() {
+    common::ensure_built();
+    let temp = tempfile::tempdir().unwrap();
+    common::write_project(temp.path(), "function main() -> int { 7 }\n");
+    // Boundary answers with an environment's name in lowercase, however the manifest spells it.
+    let manifest = manifest("").replace(r#""staging""#, r#""Staging""#);
+    assert_eq!(
+        manifest
+            .matches(r#"embed_telemetry_env = "Staging""#)
+            .count(),
+        2
+    );
+    std::fs::write(temp.path().join("baml.toml"), manifest).unwrap();
+    let server = MockServer::start().await;
+    Mock::given(path("/v1/auth/verify"))
+        .and(body_json(json!({"fullResponse":true})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(verification_response()))
+        .expect(2)
+        .mount(&server)
+        .await;
+    succeeded(&cli(
+        temp.path(),
+        &server.uri(),
+        &["pack", "main", "--embed-telemetry", "-o", "out"],
+    ));
+    succeeded(&cli(
+        temp.path(),
+        &server.uri(),
+        &["generate", "--embed-telemetry"],
+    ));
+}
+
 /// Execute matching packed artifacts with the actual effective control, including
 /// conflicting built-in/custom values and embedded credentials.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

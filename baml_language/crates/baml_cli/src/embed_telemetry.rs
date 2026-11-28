@@ -4,6 +4,7 @@ use std::ffi::OsString;
 use anyhow::{Context, Result};
 use btel_settings::artifact::{
     ArtifactKind, ArtifactTelemetry, BuildTelemetry, EmbeddedCredential, EmbeddedIngestion,
+    EnvironmentName,
 };
 use clap::Args;
 
@@ -41,7 +42,7 @@ impl EmbedTelemetryArgs {
             !org.is_empty() && !name.trim().is_empty() && !name.contains('/') &&
                 !org.chars().any(char::is_whitespace)
         }).context("Cannot embed telemetry: boundary.project must be org_handle/project_name; correct the manifest or supply a key owned by that project.")?;
-        let environment = build.expected_environment.as_deref().filter(|v| !v.trim().is_empty())
+        let environment = build.expected_environment.as_ref()
             .with_context(|| format!("Cannot embed telemetry: set {environment_setting} in baml.toml to the expected environment for exclusive write access."))?;
         let mut candidate = policy.clone();
         self.apply_with(
@@ -112,7 +113,7 @@ fn validate_key(
     key: &bcs_api::api_keys::VerifiedApiKey,
     org: &str,
     project: &str,
-    environment: &str,
+    environment: &EnvironmentName,
 ) -> Result<()> {
     use bcs_api::api_keys::PermissionTarget;
     let verified_org = key.organization.slug.as_deref().unwrap_or("<unavailable>");
@@ -142,7 +143,7 @@ fn validate_key(
     anyhow::ensure!(
         !environment_id.is_empty()
             && resolved.id == *environment_id
-            && resolved.name == environment
+            && EnvironmentName::new(&resolved.name).as_ref() == Some(environment)
             && resolved.project_id == key.project.id
             && resolved.organization_id == key.organization.id,
         "Cannot embed telemetry: the key's resolved ingestion environment does not match {org}/{project}/{environment} or its owning project and organization."

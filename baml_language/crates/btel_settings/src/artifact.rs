@@ -208,11 +208,32 @@ const BUILD_FIELDS: &[&str] = &[
     "embed_telemetry_env",
 ];
 
+/// The name of a Boundary environment.
+///
+/// Boundary names environments in ASCII and reads a name without regard to its case:
+/// `Production` and `production` are one environment. A name is held in ASCII lowercase, so
+/// two names that differ only in case are equal.
+#[derive(Debug, PartialEq, Eq)]
+pub struct EnvironmentName(String);
+
+impl EnvironmentName {
+    /// The name `written` spells, or `None` when it is blank and so names nothing.
+    pub fn new(written: &str) -> Option<Self> {
+        (!written.trim().is_empty()).then(|| Self(written.to_ascii_lowercase()))
+    }
+}
+
+impl fmt::Display for EnvironmentName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 /// Build inputs are separate from the runtime policy serialized into artifacts.
 #[derive(Debug, Default)]
 pub struct BuildTelemetry {
     pub api_key_from_env_var: Option<String>,
-    pub expected_environment: Option<String>,
+    pub expected_environment: Option<EnvironmentName>,
 }
 
 impl BuildTelemetry {
@@ -254,8 +275,7 @@ impl BuildTelemetry {
                 .map(|value| {
                     value
                         .as_str()
-                        .filter(|name| !name.trim().is_empty())
-                        .map(str::to_owned)
+                        .and_then(EnvironmentName::new)
                         .ok_or_else(|| {
                             PolicyError(format!(
                                 "{namespace}.embed_telemetry_env must be a non-empty string."
@@ -717,7 +737,10 @@ embed_telemetry_env = "Bridge environment"
         ] {
             let build = BuildTelemetry::from_manifest(&manifest, kind).unwrap();
             assert_eq!(build.api_key_from_env_var.as_deref(), Some(key));
-            assert_eq!(build.expected_environment.as_deref(), Some(environment));
+            assert_eq!(
+                build.expected_environment,
+                EnvironmentName::new(environment)
+            );
             assert_eq!(
                 ArtifactTelemetry::from_manifest(&manifest, kind).unwrap(),
                 ArtifactTelemetry {
@@ -741,6 +764,25 @@ embed_telemetry_env = "Bridge environment"
                     )
                 );
             }
+        }
+    }
+
+    #[test]
+    fn environment_names_are_equal_when_only_their_ascii_case_differs() {
+        let name = EnvironmentName::new;
+        assert_eq!(name("Production"), name("production"));
+        assert_eq!(name("PRODUCTION"), name("production"));
+        assert_eq!(
+            name("EU.West_2-Blue").unwrap().to_string(),
+            "eu.west_2-blue"
+        );
+        assert_ne!(name("production"), name("prod"));
+        assert_ne!(name("production"), name("staging"));
+        assert_ne!(name("production"), name(" production"));
+        // Boundary's names are ASCII, so no other letter folds into one of them.
+        assert_ne!(name("É"), name("é"));
+        for blank in ["", " ", "\t\n"] {
+            assert_eq!(name(blank), None);
         }
     }
 
